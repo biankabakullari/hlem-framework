@@ -46,13 +46,13 @@ def class_value(value, low, high):
         return "N"
 
 
-def get_all_feature_values(cs_all_aggr):
+def get_all_feature_values(eval_all_aggr):
     feature_values = {}
 
-    for w in cs_all_aggr.keys():
-        cs_w_values = cs_all_aggr[w]
-        for f_comp_pair in cs_w_values.keys():
-            v = cs_w_values[f_comp_pair]
+    for w in eval_all_aggr.keys():
+        eval_w_values = eval_all_aggr[w]
+        for f_comp_pair in eval_w_values.keys():
+            v = eval_w_values[f_comp_pair]
             if f_comp_pair in feature_values.keys():
                 feature_values[f_comp_pair].append(v)
             else:
@@ -61,18 +61,18 @@ def get_all_feature_values(cs_all_aggr):
     return feature_values
 
 
-def get_all_feature_values_per_type(cs_all_aggr, comp_type_dict):
+def get_all_feature_values_per_type(eval_all_aggr, comp_type_dict):
 
     feature_values_type = {}  # e.g. feature_values_type[('activity', 'exec')] = [...]
 
-    for w in cs_all_aggr.keys():
-        cs_w_values = cs_all_aggr[w]
-        for f_comp_pair in cs_w_values.keys():
+    for w in eval_all_aggr.keys():
+        eval_w_values = eval_all_aggr[w]
+        for f_comp_pair in eval_w_values.keys():
             f = f_comp_pair[0]
             comp = f_comp_pair[1]
             entity_type = comp_type_dict[comp]
             type_f_pair = (entity_type, f)
-            v = cs_w_values[f_comp_pair]
+            v = eval_w_values[f_comp_pair]
             if type_f_pair in feature_values_type.keys():
                 feature_values_type[type_f_pair].append(v)
             else:
@@ -81,10 +81,10 @@ def get_all_feature_values_per_type(cs_all_aggr, comp_type_dict):
     return feature_values_type
 
 
-def get_all_feature_thresholds(cs_all, comp_type_dict, p, relative_congestion):
+def get_all_feature_thresholds(eval_all, comp_type_dict, p, relative_congestion):
     all_feature_thresh = {}
     # all_values = get_all_feature_values(cs_all)
-    all_values = get_all_feature_values_per_type(cs_all, comp_type_dict)
+    all_values = get_all_feature_values_per_type(eval_all, comp_type_dict)
 
     if relative_congestion:  # look at congestion per type and feature
         for type_f_pair in all_values.keys():
@@ -105,10 +105,10 @@ def get_all_feature_thresholds(cs_all, comp_type_dict, p, relative_congestion):
 
 
 # traffic_type must be [High], [Low], or [High, Low]
-def hle_window(traffic_type, window, cs_all_aggr, comp_type_dict, all_feature_thresholds, frequencies_last):
+def hle_window(traffic_type, window, eval_all_aggr, comp_type_dict, all_feature_thresholds, frequencies_last):
 
     hle_w = []
-    window_cs_aggr = cs_all_aggr[window]
+    window_cs_aggr = eval_all_aggr[window]
     for f_comp_pair in window_cs_aggr.keys():
         f_comp_value = window_cs_aggr[f_comp_pair]
         f = f_comp_pair[0]
@@ -125,14 +125,14 @@ def hle_window(traffic_type, window, cs_all_aggr, comp_type_dict, all_feature_th
     return hle_w, frequencies_last
 
 
-def hle_all_windows(traffic_type, cs_all, comp_type_dict, p, relative_congestion):
+def hle_all_windows(traffic_type, eval_all, comp_type_dict, p, relative_congestion):
     hle_all = {}
     hla_frequencies = defaultdict(lambda: 0)
-    all_feature_thresholds = get_all_feature_thresholds(cs_all, comp_type_dict, p, relative_congestion)
+    all_feature_thresholds = get_all_feature_thresholds(eval_all, comp_type_dict, p, relative_congestion)
     last_freq = hla_frequencies
 
-    for w in cs_all.keys():
-        hle_all[w], last_freq_updated = hle_window(traffic_type, w, cs_all, comp_type_dict, all_feature_thresholds,
+    for w in eval_all.keys():
+        hle_all[w], last_freq_updated = hle_window(traffic_type, w, eval_all, comp_type_dict, all_feature_thresholds,
                                                    last_freq)
         last_freq = last_freq_updated
 

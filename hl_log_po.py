@@ -1,7 +1,7 @@
 import pandas as pd
 from pm4py.objects.conversion.log import converter as log_converter
 from pm4py.objects.log.exporter.xes import exporter as xes_exporter
-import extractor
+import preprocess
 
 
 def create_hle_table(case_column, activity_column, timestamp_column, val_column, comp_type_column):
@@ -47,7 +47,7 @@ def get_table_data(bucket_w_dict, hle_all_w, cascade_dict, tz_info, hla_filtered
 
     for w in bucket_w_dict.keys():
         w_time_int = bucket_w_dict[w][0]
-        w_time_ts = extractor.int_to_ts(w_time_int, tz_info)
+        w_time_ts = preprocess.int_to_ts(w_time_int, tz_info)
         hle_w = hle_all_w[w]
         for i, hle in enumerate(hle_w):
             hla = hle[:3]

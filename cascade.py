@@ -15,7 +15,7 @@ def window_entities(hle_w):
 
 
 # call only if both windows have high-level events
-def two_windows_edge_weights(w1, w2, hle_w1, hle_w2, proximity_dic, comp_type_dic):
+def two_windows_edge_weights(w1, w2, hle_w1, hle_w2, link_dic, comp_type_dic):
 
     edge_weights_dict = defaultdict(lambda: 0)
     entities_w1, entities_w2 = window_entities(hle_w1), window_entities(hle_w2)
@@ -29,27 +29,21 @@ def two_windows_edge_weights(w1, w2, hle_w1, hle_w2, proximity_dic, comp_type_di
                 uv_weight = 1
             else:
                 type_i, type_j = comp_type_dic[entity_i], comp_type_dic[entity_j]
-                type_set = {type_i, type_j}
-
-                if type_set == {'activity'}:
-                    key = 'aa'
-                elif type_set == {'resource'}:
-                    key = 'rr'
-                elif type_set == {'segment'}:
-                    key = 'ss'
-                elif type_set == {'activity', 'resource'}:
+                key = type_i[0] + type_j[0]
+                if key == 'ra':
                     key = 'ar'
-                elif type_set == {'activity', 'segment'}:
+                elif key == 'sa':
                     key = 'as'
-                else:
+                elif key == 'sr':
                     key = 'rs'
-                uv_weight = proximity_dic[key][(entity_i, entity_j)]
+
+                uv_weight = link_dic[key][(entity_i, entity_j)]
             edge_weights_dict[(u, v)] = uv_weight
 
     return edge_weights_dict
 
 
-def hle_graph_weighted(hle_all_w, proximity_dic, comp_type_dic, thresh):
+def hle_graph_weighted(hle_all_w, link_dic, comp_type_dic, thresh):
 
     windows = hle_all_w.keys()
     no_windows = len(windows)
@@ -66,7 +60,7 @@ def hle_graph_weighted(hle_all_w, proximity_dic, comp_type_dic, thresh):
             v_nodes = [(w, i) for i in range(w_number_hle)]
             G.add_nodes_from(v_nodes)
             if last_opened:
-                edge_weights_last_now = two_windows_edge_weights(w-1, w, last_hle, hle_w, proximity_dic, comp_type_dic)
+                edge_weights_last_now = two_windows_edge_weights(w-1, w, last_hle, hle_w, link_dic, comp_type_dic)
                 for u, v in edge_weights_last_now.keys():
                     cc_u_size = len(nx.node_connected_component(G, u))
                     uv_weight = edge_weights_last_now[(u, v)]

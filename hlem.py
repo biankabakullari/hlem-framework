@@ -1,7 +1,8 @@
-import extractor
+import preprocess
 import component
+import links
 import frames
-import congestion_state as cs_state
+import feature_eval
 import hle_generation as hle_gen
 import cascade
 import hl_log_po
@@ -19,14 +20,14 @@ def transform_log_to_hl_log_width(log, number, traffic_type, selected_f_list, p=
     except ValueError:
         print("Set resource_info to True if you want to analyze resources and their features")
 
-    print('Computing segments, components and their proximity')
-    # first: create event dictionary, event_pairs, trig and release dicts, proximity measure
-    event_dict = extractor.event_dict(log, res_info)
-    pairs, trig, rel = extractor.trig_rel_dicts(log, seg_method)
+    print('Computing steps, components and their link values')
+    # first: create event dictionary, event_pairs, trig and release dicts, components, and link values
+    event_dict = preprocess.event_dict(log, res_info)
+    pairs, trig, rel = preprocess.trig_rel_dicts(log, seg_method)
     A_set, R_set, S_set = component.components(event_dict, pairs, res_info)
     comp_type_dic = component.comp_type_dict(A_set, R_set, S_set)
-    proximity_abs = component.proximity(event_dict, pairs, trig, rel, res_info)
-    proximity = component.normalize_weights(proximity_abs)
+    link_abs = links.link(event_dict, pairs, trig, rel, res_info)
+    link = links.spread_weights(link_abs)
 
     print('Computing frames, partitioning events into frames')
     width = frames.get_width_from_number(event_dict, number)
@@ -34,14 +35,15 @@ def transform_log_to_hl_log_width(log, number, traffic_type, selected_f_list, p=
     bucketId_eventList_dict, id_frame_mapping = frames.bucket_id_list_dict_by_width(event_dict, width)
 
     print('Computing cs across all time windows')
-    cs_complete = cs_state.cs(A_set, R_set, S_set, event_dict, trig, bucketId_borders_dict, id_frame_mapping, pairs,
-                              res_info, act_selection, res_selection)
-    cs_all = cs_state.cs_feature_selection(cs_complete, selected_f_list)
+    hlf_eval_complete = feature_eval.hlf_eval(A_set, R_set, S_set, event_dict, trig, bucketId_borders_dict,
+                                              id_frame_mapping, pairs, res_info, act_selection, res_selection)
+    hlf_eval_all = feature_eval.hlf_eval_selection(hlf_eval_complete, selected_f_list)
 
     print('Generating high-level events')
-    hle_all_windows, freq_dict = hle_gen.hle_all_windows(traffic_type, cs_all, comp_type_dic, p, relative_congestion)
+    hle_all_windows, freq_dict = hle_gen.hle_all_windows(traffic_type, hlf_eval_all, comp_type_dic, p,
+                                                         relative_congestion)
     print('Computing cascades')
-    G = cascade.hle_graph_weighted(hle_all_windows, proximity, comp_type_dic, connection_thresh)
+    G = cascade.hle_graph_weighted(hle_all_windows, link, comp_type_dic, connection_thresh)
     cascade_dict = cascade.cascade_id(G)
     print('Projecting on frequent high-level activities')
     hla_list_filtered = hle_gen.filter_hla(freq_dict, freq)

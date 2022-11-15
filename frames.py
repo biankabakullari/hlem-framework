@@ -1,32 +1,23 @@
 import math
-import extractor
-
-import pm4py
 
 
 # given event_dict, returns a list of the keys (event IDs) sorted by timestamp
 def sorted_ids_by_timestamp(event_dict):
-
     ids_sorted = sorted(event_dict.keys(), key=lambda x: event_dict[x]['ts'])
-
     return ids_sorted
 
 
 # obtain smallest timestamp in the log
 def min_ts(event_dict, ids_sorted):
-
     id_min = ids_sorted[0]
     ts_min = event_dict[id_min]['ts']
-
     return ts_min
 
 
 # obtain highest timestamp in the log
 def max_ts(event_dict, ids_sorted):
-
     id_max = ids_sorted[-1]
     ts_max = event_dict[id_max]['ts']
-
     return ts_max
 
 
@@ -104,22 +95,3 @@ def increase_window_number(p, no_windows):
 def decrease_window_number(p, no_windows):
     new_number = no_windows - p*no_windows
     return new_number
-
-
-def main():
-    running_example = 'C:/Users/bakullari/jupyter_files/running-example.xes'
-    log = pm4py.read_xes(running_example)
-
-    event_dic = extractor.event_dict(log, res_info=True)
-    number = max(event_dic.keys())
-    width = get_width_from_number(event_dic, number)
-    bucket_id_list_dic, _ = bucket_id_list_dict_by_width(event_dic, width)
-    for key in bucket_id_list_dic.keys():
-        print('BucketID: ', key)
-        ts_bucket = [event_dic[eventID]['ts'] for eventID in bucket_id_list_dic[key]]
-        for ts in ts_bucket:
-            print('EventTS: ', ts)
-
-
-if __name__ == '__main__':
-    main()

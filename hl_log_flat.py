@@ -1,7 +1,7 @@
 import pandas as pd
 from pm4py.objects.conversion.log import converter as log_converter
 from pm4py.objects.log.exporter.xes import exporter as xes_exporter
-import extractor
+import preprocess
 
 
 def create_hle_table(case_column, activity_column, timestamp_column, value_column, comp_type_column):
@@ -60,7 +60,7 @@ def get_table_data(bucket_w_dict, hle_all_w, cascade_dict, tz_info, hla_filtered
             comp_type = hle_0[4]
             case_column.append(case_id)
             activity_column.append(hla_string)
-            w_time_ts = extractor.int_to_ts(w_time_int, tz_info)
+            w_time_ts = preprocess.int_to_ts(w_time_int, tz_info)
             timestamp_column.append(w_time_ts)
             value_column.append(val)
             comp_type_column.append(comp_type)
@@ -75,7 +75,7 @@ def get_table_data(bucket_w_dict, hle_all_w, cascade_dict, tz_info, hla_filtered
                 activity_column.append(hla_strings[i])
                 # if there are 5 events, they will get timestamps start + 0, ,...., start + 4/5*window_width
                 w_hla_int = w_time_int + ((i/number)*time_granularity_int)
-                w_time_ts = extractor.int_to_ts(w_hla_int, tz_info)
+                w_time_ts = preprocess.int_to_ts(w_hla_int, tz_info)
                 timestamp_column.append(w_time_ts)
                 val = hle[3]
                 comp_type = hle[4]
