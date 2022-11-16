@@ -1,97 +1,116 @@
 import math
 
 
-# given event_dict, returns a list of the keys (event IDs) sorted by timestamp
-def sorted_ids_by_timestamp(event_dict):
+def sorted_ids_by_ts(event_dict):
+    """
+
+    :param event_dict: dictionary where keys are numbers identifying events, values are the event attribute-value pairs
+    :return: a list of the keys (event IDs) sorted by timestamp
+    """
     ids_sorted = sorted(event_dict.keys(), key=lambda x: event_dict[x]['ts'])
     return ids_sorted
 
 
-# obtain smallest timestamp in the log
 def min_ts(event_dict, ids_sorted):
+    """
+    obtain the smallest timestamp in the log (timestamp is an integer = seconds elapsed since Unix time)
+    """
     id_min = ids_sorted[0]
     ts_min = event_dict[id_min]['ts']
     return ts_min
 
 
-# obtain highest timestamp in the log
 def max_ts(event_dict, ids_sorted):
+    """
+    obtain the largest timestamp in the log (timestamp is an integer = seconds elapsed since Unix time)
+    """
     id_max = ids_sorted[-1]
     ts_max = event_dict[id_max]['ts']
     return ts_max
 
 
-# given start and end ts of the log data and width of window, obtain dictionary with
-# keys=bucket number, value=(left_border, right_border) as numbers
-def bucket_window_dict_by_width(event_dict, width):
+def get_window_size(event_dict, number):
+    """
+    Given the events and desired number of windows, the size of each window is determined (all windows equally spread
+    between the first and last recorded timestamp)
+    """
+    ids_sorted = sorted_ids_by_ts(event_dict)
 
-    ids_sorted = sorted_ids_by_timestamp(event_dict)
     start_int = min_ts(event_dict, ids_sorted)
     end_int = max_ts(event_dict, ids_sorted)
 
-    bucket_window_dict = {}
-    b = 0
+    window_size = math.ceil((end_int - start_int)/number)
+
+    return window_size
+
+
+def window_borders_dict(event_dict, window_size):
+    """
+
+    Given the events and desired window size (width), returns dictionary where each key is a number identifying a window
+    and each value=(left_border, right_border) a tuple containing the borders of the window
+    """
+    ids_sorted = sorted_ids_by_ts(event_dict)
+    start_int = min_ts(event_dict, ids_sorted)
+    end_int = max_ts(event_dict, ids_sorted)
+
+    w_borders_dict = {}
+    w = 0
 
     current_left = start_int
-    current_right = current_left + width
+    current_right = current_left + window_size
     while current_right < end_int:
-        bucket_window_dict[b] = (current_left, current_right)
+        w_borders_dict[w] = (current_left, current_right)
         current_left = current_right
-        current_right = current_left + width
-        b += 1
+        current_right = current_left + window_size
+        w += 1
 
-    return bucket_window_dict
-
-
-def get_width_from_number(event_dict, number):
-
-    ids_sorted = sorted_ids_by_timestamp(event_dict)
-
-    start_int = min_ts(event_dict, ids_sorted)
-    end_int = max_ts(event_dict, ids_sorted)
-
-    width = math.ceil((end_int - start_int)/number)
-
-    return width
+    return w_borders_dict
 
 
-# given event dictionary and window size
-# create dict with bucket numbers as keys and list of event IDs that happen within corresponding window as values
-def bucket_id_list_dict_by_width(event_dict, width):
+def window_events_dict(event_dict, window_size):
 
-    ids_sorted = sorted_ids_by_timestamp(event_dict)
-    bucket_window_dict = bucket_window_dict_by_width(event_dict, width)
+    """
+    :param event_dict: events
+    :param window_size: desired window size
+    :return:
+    -   w_events_list: dict with window identifiers as keys and list of event IDs that occur within that window as
+    values
+    -   id_window_mapping: dict where id_window_mapping[e_id]=w whenever an event e with id e_id occurs within window w
+    """
 
-    # initially, each window bucket is empty
-    # some window buckets might remain empty
-    bucket_id_list = {b: [] for b in bucket_window_dict.keys()}
+    ids_sorted = sorted_ids_by_ts(event_dict)
+    w_borders_dict = window_borders_dict(event_dict, window_size)
+
+    # initially, each window is empty
+    # some windows might remain empty, but we still want them to exist
+    w_events_list = dict.fromkeys(list(w_borders_dict.keys()), [])
 
     #assign corresponding frame to each event
-    id_bucket_mapping = {ev_id: 0 for ev_id in event_dict.keys()}
+    id_window_mapping = dict.fromkeys(list(event_dict.keys()), 0)
 
-    curr_bucket = 0
-    max_bucket = max([bucketId for bucketId in bucket_id_list.keys()])
-    curr_window = bucket_window_dict[curr_bucket]
+    current_window = 0
+    max_window = max([bucketId for bucketId in w_events_list.keys()])
+    current_borders = w_borders_dict[current_window]
 
     for ev_id in ids_sorted:
-        curr_ts = event_dict[ev_id]['ts']
+        current_ts = event_dict[ev_id]['ts']
 
-        # as long as current timestamp is higher than right border, got to next window
-        while curr_ts >= curr_window[1] and curr_bucket < max_bucket:
-            curr_bucket += 1
+        # as long as current timestamp is higher than right border, go to next window
+        while current_ts >= current_borders[1] and current_window < max_window:
+            current_window += 1
+            current_borders = w_borders_dict[current_window]
+        w_events_list[current_window].append(ev_id)
+        id_window_mapping[ev_id] = current_window
 
-            curr_window = bucket_window_dict[curr_bucket]
-        bucket_id_list[curr_bucket].append(ev_id)
-        id_bucket_mapping[ev_id] = curr_bucket
-
-    return bucket_id_list, id_bucket_mapping
-
-
-def increase_window_number(p, no_windows):
-    new_number = no_windows + p*no_windows
-    return new_number
+    return w_events_list, id_window_mapping
 
 
-def decrease_window_number(p, no_windows):
-    new_number = no_windows - p*no_windows
-    return new_number
+# def increase_window_number(p, no_windows):
+#     new_number = no_windows + p*no_windows
+#     return new_number
+#
+#
+# def decrease_window_number(p, no_windows):
+#     new_number = no_windows - p*no_windows
+#     return new_number

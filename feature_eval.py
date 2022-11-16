@@ -1,4 +1,4 @@
-def init_hlf_eval(activity_set, resource_set, segment_set, frames, act_selected, res_selected):
+def init_eval_hlf(activity_set, resource_set, segment_set, frames, act_selected, res_selected):
     eval_init = {frame: {} for frame in frames}
 
     if act_selected == 'all':
@@ -8,7 +8,7 @@ def init_hlf_eval(activity_set, resource_set, segment_set, frames, act_selected,
         A = act_selected
         S = [(s1, s2) for (s1, s2) in segment_set if s1 in A and s2 in A]
     exec_a = {('exec', a): 0 for a in A}
-    # exec_ld_a = {('exec-ld', a): 0 for a in A}
+    exec_ld_a = {('exec-ld', a): 0 for a in A}
 
     if res_selected == 'all':
         R = resource_set
@@ -30,72 +30,73 @@ def init_hlf_eval(activity_set, resource_set, segment_set, frames, act_selected,
     return eval_init, A, R, S
 
 
-def hlf_eval(activity_set, resource_set, segment_set, event_dic, trig_dic, bucket_window_dic, id_frame_mapping,
+def eval_hlf(activity_set, resource_set, segment_set, event_dic, trig_dic, window_borders_dict, id_window_mapping,
              id_pairs, res_info, act_selected, res_selected):
 
-    frames = sorted(bucket_window_dic.keys())
-    hlf_eval_complete, A, R, S = init_hlf_eval(activity_set, resource_set, segment_set, frames, act_selected, res_selected)
+    frames = sorted(window_borders_dict.keys())
+    eval_hlf_complete, A, R, S = init_eval_hlf(activity_set, resource_set, segment_set, frames, act_selected,
+                                               res_selected)
 
     singles = [i for i in event_dic.keys() if event_dic[i]['single'] or len(trig_dic[i]) == 0]
     for i in singles:
-        w_i = id_frame_mapping[i]
+        w_i = id_window_mapping[i]
         ai = event_dic[i]['act']
         if ai in A:
-            hlf_eval_complete[w_i][('exec', ai)] += 1
-            hlf_eval_complete[w_i][('exec-ld', ai)] += 1
+            eval_hlf_complete[w_i][('exec', ai)] += 1
+            eval_hlf_complete[w_i][('exec-ld', ai)] += 1
         if res_info:
             ri = event_dic[i]['res']
             if ri in R:
-                hlf_eval_complete[w_i][('do', ri)] += 1
-                hlf_eval_complete[w_i][('wl', ri)] += 1
+                eval_hlf_complete[w_i][('do', ri)] += 1
+                eval_hlf_complete[w_i][('wl', ri)] += 1
 
     for i, j in id_pairs:
-        w_i = id_frame_mapping[i]
-        w_j = id_frame_mapping[j]
+        w_i = id_window_mapping[i]
+        w_j = id_window_mapping[j]
 
         ai, aj = event_dic[i]['act'], event_dic[j]['act']
         ts_i, ts_j = event_dic[i]['ts'], event_dic[j]['ts']
         s = (ai, aj)
         if ai in A:
-            hlf_eval_complete[w_i][('exec', ai)] += 1
-            hlf_eval_complete[w_i][('exec-ld', ai)] += 1
+            eval_hlf_complete[w_i][('exec', ai)] += 1
+            eval_hlf_complete[w_i][('exec-ld', ai)] += 1
 
         if s in S:
-            hlf_eval_complete[w_i][('enter', s)] += 1
-            hlf_eval_complete[w_j][('exit', s)] += 1
+            eval_hlf_complete[w_i][('enter', s)] += 1
+            eval_hlf_complete[w_j][('exit', s)] += 1
 
         if res_info:
             ri = event_dic[i]['res']
             if ri in R:
-                hlf_eval_complete[w_i][('do', ri)] += 1
-                hlf_eval_complete[w_i][('wl', ri)] += 1
+                eval_hlf_complete[w_i][('do', ri)] += 1
+                eval_hlf_complete[w_i][('wl', ri)] += 1
 
         for w in range(w_i, w_j):  # w_j not included
             if aj in A:
-                hlf_eval_complete[w][('exec-ld', aj)] += 1
+                eval_hlf_complete[w][('exec-ld', aj)] += 1
             if s in S:
-                hlf_eval_complete[w][('progr', s)] += 1
-                w_right_border = bucket_window_dic[w][1]
-                hlf_eval_complete[w][('wt', s)] += w_right_border - ts_i
+                eval_hlf_complete[w][('progr', s)] += 1
+                w_right_border = window_borders_dict[w][1]
+                eval_hlf_complete[w][('wt', s)] += w_right_border - ts_i
             if res_info:
                 rj = event_dic[j]['res']
                 if rj in R:
-                    hlf_eval_complete[w][('wl', rj)] += 1
+                    eval_hlf_complete[w][('wl', rj)] += 1
 
         if s in S:
-            hlf_eval_complete[w_j][('progr', s)] += 1
-            hlf_eval_complete[w_j][('wt', s)] += ts_j - ts_i
+            eval_hlf_complete[w_j][('progr', s)] += 1
+            eval_hlf_complete[w_j][('wt', s)] += ts_j - ts_i
 
-    for frame in hlf_eval_complete.keys():
+    for frame in eval_hlf_complete.keys():
         for s in S:
-            progr = hlf_eval_complete[frame][('progr', s)]
+            progr = eval_hlf_complete[frame][('progr', s)]
             if progr > 0:
-                hlf_eval_complete[frame][('wt', s)] /= progr
+                eval_hlf_complete[frame][('wt', s)] /= progr
 
-    return hlf_eval_complete
+    return eval_hlf_complete
 
 
-def hlf_eval_selection_window(eval_complete_w, selected_f_list):
+def eval_hlf_selection_window(eval_complete_w, selected_f_list):
     eval_filtered_w = {}
     for f, comp in eval_complete_w.keys():
         if f in selected_f_list:
@@ -104,11 +105,11 @@ def hlf_eval_selection_window(eval_complete_w, selected_f_list):
     return eval_filtered_w
 
 
-def hlf_eval_selection(cs_complete, selected_f_list):
-    cs_filtered = {}
+def eval_hlf_selection(cs_complete, selected_f_list):
+    eval_filtered = {}
     for frame in cs_complete.keys():
-        cs_complete_w = cs_complete[frame]
-        cs_filtered_w = hlf_eval_selection_window(cs_complete_w, selected_f_list)
-        cs_filtered[frame] = cs_filtered_w
+        eval_complete_w = cs_complete[frame]
+        eval_filtered_w = eval_hlf_selection_window(eval_complete_w, selected_f_list)
+        eval_filtered[frame] = eval_filtered_w
 
-    return cs_filtered
+    return eval_filtered

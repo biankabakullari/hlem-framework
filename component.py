@@ -1,8 +1,13 @@
-def components(event_dic, pairs_list, res_info):
-
+def components(event_dic, steps_list, res_info):
+    """
+    returns:
+     -  the activity set (from the 'act' attribute values in the event_doc),
+     -  the resource set (from the 'res' attribute values in the event_doc, empty set if res_info=False),
+     -  the segments set (activity pairs from the event pairs in the steps_list)
+    """
     A = set([event_dic[ev]['act'] for ev in event_dic.keys()])
-    S = set([(event_dic[i]['act'], event_dic[j]['act']) for (i, j) in pairs_list])
-    R = []
+    S = set([(event_dic[i]['act'], event_dic[j]['act']) for (i, j) in steps_list])
+    R = set([])
     if res_info:
         R = set([event_dic[ev]['res'] for ev in event_dic.keys()])
 
@@ -10,7 +15,10 @@ def components(event_dic, pairs_list, res_info):
 
 
 def comp_type_dict(activity_set, resource_set, segment_set):
-
+    """
+    returns a dictionary, where each component (each activity, each resource and each segment) is a key, and its value
+    shows what kind of component it is (an activity, a resource or a segment)
+    """
     comp_type = {}
 
     for a in activity_set:
