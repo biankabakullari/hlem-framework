@@ -21,8 +21,8 @@ def init_eval_hlf(activity_set, resource_set, segment_set, frames, act_selected,
     enter_s = {('enter', s): 0 for s in S}
     exit_s = {('exit', s): 0 for s in S}
     progr_s = {('progr', s): 0 for s in S}
-    wt_s = {('wt', s): 0 for s in S}  # needs to be normalized in the end
-    hlf_init = [exec_a, do_r, todo_r, wl_r, enter_s, exit_s, progr_s, wt_s]
+    wt_s = {('wt', s): 0 for s in S}  # needs to be divided by # cases in progress in the end
+    hlf_init = [exec_a, exec_ld_a, do_r, todo_r, wl_r, enter_s, exit_s, progr_s, wt_s]
     for frame in eval_init.keys():
         for f_init in hlf_init:
             eval_init[frame].update(f_init)
@@ -36,7 +36,6 @@ def eval_hlf(activity_set, resource_set, segment_set, event_dic, trig_dic, windo
     frames = sorted(window_borders_dict.keys())
     eval_hlf_complete, A, R, S = init_eval_hlf(activity_set, resource_set, segment_set, frames, act_selected,
                                                res_selected)
-
     singles = [i for i in event_dic.keys() if event_dic[i]['single'] or len(trig_dic[i]) == 0]
     for i in singles:
         w_i = id_window_mapping[i]
@@ -97,19 +96,19 @@ def eval_hlf(activity_set, resource_set, segment_set, event_dic, trig_dic, windo
 
 
 def eval_hlf_selection_window(eval_complete_w, selected_f_list):
-    eval_filtered_w = {}
+    eval_selected_w = {}
     for f, comp in eval_complete_w.keys():
         if f in selected_f_list:
-            eval_filtered_w[(f, comp)] = eval_complete_w[(f, comp)]
+            eval_selected_w[(f, comp)] = eval_complete_w[(f, comp)]
 
-    return eval_filtered_w
+    return eval_selected_w
 
 
 def eval_hlf_selection(cs_complete, selected_f_list):
-    eval_filtered = {}
+    eval_selected = {}
     for frame in cs_complete.keys():
         eval_complete_w = cs_complete[frame]
         eval_filtered_w = eval_hlf_selection_window(eval_complete_w, selected_f_list)
-        eval_filtered[frame] = eval_filtered_w
+        eval_selected[frame] = eval_filtered_w
 
-    return eval_filtered
+    return eval_selected

@@ -1,4 +1,5 @@
 import itertools as it
+from collections import defaultdict
 import component
 
 
@@ -25,9 +26,9 @@ def global_counts(event_dic, pairs_list, trig_dic, rel_dic, res_info):
     ss_counts = dict.fromkeys(list(it.product(segment_set, segment_set)), 0)
 
     r_counts = dict.fromkeys(resource_set, 0)
-    rr_counts = {(0, 0): 0}
-    ar_counts = {(0, 0): 0}
-    rs_counts = {(0, (0, 0)): 0}
+    rr_counts = dict.fromkeys(list(it.product(resource_set, resource_set)), 0)
+    ar_counts = dict.fromkeys(list(it.product(activity_set, resource_set)), 0)
+    rs_counts = dict.fromkeys(list(it.product(resource_set, segment_set)), 0)
 
     for ev in event_dic.keys():
         a = event_dic[ev]['act']
@@ -46,11 +47,6 @@ def global_counts(event_dic, pairs_list, trig_dic, rel_dic, res_info):
                     ss_counts[(s1, s2)] += 1
 
         if res_info and len(resource_set):
-            r_counts = dict.fromkeys(resource_set, 0)
-            rr_counts = dict.fromkeys(list(it.product(resource_set, resource_set)), 0)
-            ar_counts = dict.fromkeys(list(it.product(activity_set, resource_set)), 0)
-            rs_counts = dict.fromkeys(list(it.product(resource_set, segment_set)), 0)
-
             r = event_dic[ev]['res']
             r_counts[r] += 1
             ar_counts[(a, r)] += 1
@@ -80,6 +76,7 @@ def link(event_dic, pairs_list, trig_dic, rel_dic, res_info):
                  'rr': dict.fromkeys(list(rr_counts.keys()), 0.0),
                  'ss': dict.fromkeys(list(ss_counts.keys()), 0.0),
                  'ar': dict.fromkeys(list(ar_counts.keys()), 0.0),
+                 'as': defaultdict(lambda: 0),
                  'rs': dict.fromkeys(list(rs_counts.keys()), 0.0)
                  }
 
@@ -93,20 +90,21 @@ def link(event_dic, pairs_list, trig_dic, rel_dic, res_info):
 
     # the link value for each segment pair
     for s1, s2 in link_dict['ss'].keys():
-        s1_freq, s2_freq = ss_counts[s1], s_counts[s2]
+        s1_freq, s2_freq = s_counts[s1], s_counts[s2]
         s1_s2_freq, s2_s1_freq = ss_counts[(s1, s2)], ss_counts[(s2, s1)]
         # val = 0.5 * (s1_s2_freq / s1_freq) + 0.5 * (s2_s1_freq / s2_freq)
         val = max((s1_s2_freq / s1_freq), (s2_s1_freq / s2_freq))
         link_dict['ss'][(s1, s2)] = val
 
     # the link value for each activity-segment pair
-    for a, s in link_dict['as'].keys():
-        if a in s:
-            a_freq, s_freq = a_counts[a], s_counts[s]
-            val = s_freq / a_freq
+    for a in a_counts.keys():
+        for s in aa_counts.keys():
+            if a in s:
+                a_freq, s_freq = a_counts[a], aa_counts[s]
+                val = s_freq / a_freq
+            else:
+                val = 0
             link_dict['as'][(a, s)] = val
-
-        # else: if a not in s, then the link value will stay 0 as initialized
 
     if res_info:
         # the link value for each resource pair
@@ -150,6 +148,7 @@ def spread_weights(all_weights):
     :param all_weights: a list of weights from [0,1], some may be 0
     :return: a dictionary where each key is an old weight, and the value is the new weight
     """
+    #print(all_weights)
     mapping = dict.fromkeys(all_weights, 0.0)
     positive_weights = [w for w in all_weights if w > 0]
     if len(positive_weights):

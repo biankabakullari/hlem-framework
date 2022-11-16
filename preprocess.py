@@ -16,6 +16,11 @@ def ts_to_int(datetime_ts):
     return int_ts
 
 
+def int_to_ts(int_number, tz_info):
+    timestamp = datetime.fromtimestamp(int_number, tz_info)
+    return timestamp
+
+
 def df_po_trace(trace):
     """
 
@@ -199,9 +204,3 @@ def event_dict(log, res_info):
         return event_dic_with_resource(log)
     else:
         return event_dic_wo_resource(log)
-
-
-
-# def int_to_ts(int_number, tz_info):
-#     timestamp = datetime.fromtimestamp(int_number, tz_info)
-#     return timestamp

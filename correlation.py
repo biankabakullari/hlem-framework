@@ -32,12 +32,16 @@ def two_windows_edge_weights(w1, w2, hle_w1, hle_w2, link_dic, comp_type_dic):
                 key = type_i[0] + type_j[0]
                 if key == 'ra':
                     key = 'ar'
+                    uv_weight = link_dic[key][(entity_j, entity_i)]
                 elif key == 'sa':
                     key = 'as'
+                    uv_weight = link_dic[key][(entity_j, entity_i)]
                 elif key == 'sr':
                     key = 'rs'
+                    uv_weight = link_dic[key][(entity_j, entity_i)]
 
-                uv_weight = link_dic[key][(entity_i, entity_j)]
+                else:
+                    uv_weight = link_dic[key][(entity_i, entity_j)]
             edge_weights_dict[(u, v)] = uv_weight
 
     return edge_weights_dict
@@ -48,7 +52,7 @@ def hle_graph_weighted(hle_all_w, link_dic, comp_type_dic, thresh):
     windows = hle_all_w.keys()
     no_windows = len(windows)
     G = nx.Graph()
-    max_scope = min(10, math.ceil(no_windows / 100))
+    # max_scope = min(10, math.ceil(no_windows / 100))
 
     last_opened = False
     last_hle = []
@@ -59,14 +63,14 @@ def hle_graph_weighted(hle_all_w, link_dic, comp_type_dic, thresh):
         if w_number_hle > 0:  # w non-empty, will become last window
             v_nodes = [(w, i) for i in range(w_number_hle)]
             G.add_nodes_from(v_nodes)
-            if last_opened:
+            if last_opened: # the previous window has high-level events
                 edge_weights_last_now = two_windows_edge_weights(w-1, w, last_hle, hle_w, link_dic, comp_type_dic)
                 for u, v in edge_weights_last_now.keys():
                     cc_u_size = len(nx.node_connected_component(G, u))
                     uv_weight = edge_weights_last_now[(u, v)]
-                    if cc_u_size < max_scope:
-                        if uv_weight >= thresh or uv_weight == 1:
-                            G.add_edge(u, v)
+                    # if cc_u_size < max_scope:
+                    if uv_weight >= thresh:
+                        G.add_edge(u, v)
             last_opened = True
             last_hle = hle_w
 

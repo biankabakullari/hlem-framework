@@ -83,14 +83,15 @@ def convert_to_event_log(df):
     return hl_event_log
 
 
-def export_hl_event_log(log):
-    xes_exporter.apply(log, 'C:/Users/bakullari/Documents/Event logs/HL_Event_Log_local.xes')
+def export_hl_event_log(log, path):
+    xes_exporter.apply(log, path)
 
 
-def generate_hl_log(bucket_w_dict, congestion_all_w, cascade_dict, tz_info, hla_filtered, only_component):
+def generate_hl_log(bucket_w_dict, congestion_all_w, cascade_dict, tz_info, hla_filtered, only_component,
+                    path='C:/Users/bakullari/Documents/Event logs/HL_Event_Log_local.xes'):
     df = create_dataframe(bucket_w_dict, congestion_all_w, cascade_dict, tz_info, hla_filtered, only_component)
     hl_log = convert_to_event_log(df)
 
-    export_hl_event_log(hl_log)
+    export_hl_event_log(hl_log, path)  # set to own local path to save xes high-level log
 
     return hl_log, df

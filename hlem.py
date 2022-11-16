@@ -10,9 +10,8 @@ import hl_log_flat
 from datetime import timezone
 
 
-def transform_log_to_hl_log_width(log, number, traffic_type, selected_f_list, p=0.8, relative_congestion=True,
-                                  connection_thresh=0.5, res_info=False, freq=0.8, only_component=False,
-                                  act_selection='all', res_selection='all', seg_method="df", flatten=True):
+def transform_log_to_hl_log_width(log, number, traffic_type, selected_f_list, p, connection_thresh, res_info, freq,
+                                  only_component, act_selection, res_selection, seg_method, flatten):
 
     try:
         res_info is False and ('wl' in selected_f_list or 'do' in selected_f_list or 'todo' in selected_f_list or
@@ -27,7 +26,7 @@ def transform_log_to_hl_log_width(log, number, traffic_type, selected_f_list, p=
     set_A, set_R, set_S = component.components(event_dict, steps, res_info)
     component_types_dic = component.comp_type_dict(set_A, set_R, set_S)
     link_abs = linkage.link(event_dict, steps, trigger, release, res_info)
-    link = linkage.spread_weights(link_abs)
+    link = linkage.spread_link(link_abs)
 
     print('Computing frames, partitioning events into frames.')
     window_size = frames.get_window_size(event_dict, number)
@@ -35,13 +34,13 @@ def transform_log_to_hl_log_width(log, number, traffic_type, selected_f_list, p=
     w_events_list, id_window_mapping = frames.window_events_dict(event_dict, window_size)
 
     print('Evaluating the high-level features across all time windows.')
-    hlf_eval_complete = feature_eval.hlf_eval(set_A, set_R, set_S, event_dict, trigger, window_borders_dict,
+    hlf_eval_complete = feature_eval.eval_hlf(set_A, set_R, set_S, event_dict, trigger, window_borders_dict,
                                               id_window_mapping, steps, res_info, act_selection, res_selection)
-    hlf_eval_all = feature_eval.hlf_eval_selection(hlf_eval_complete, selected_f_list)
+    hlf_eval_all = feature_eval.eval_hlf_selection(hlf_eval_complete, selected_f_list)
 
     print('Generating high-level events.')
-    hle_all_windows, freq_dict = hle_gen.hle_all_windows(traffic_type, hlf_eval_all, component_types_dic, p,
-                                                         relative_congestion)
+    hle_all_windows, freq_dict = hle_gen.hle_all_windows(traffic_type, hlf_eval_all, component_types_dic, p)
+
     print('Correlating high-level events into high-level cases.')
     G = correlation.hle_graph_weighted(hle_all_windows, link, component_types_dic, connection_thresh)
     cascade_dict = correlation.cascade_id(G)
