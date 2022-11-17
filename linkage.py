@@ -131,7 +131,11 @@ def link(event_dic, pairs_list, trig_dic, rel_dic, res_info):
 
     # mapping all values onto [0,1]
     for xy_string in link_dict.keys():
-        xy_max = max(list(link_dict[xy_string].values()))
+        xy_string_values = list(link_dict[xy_string].values())
+        if len(xy_string_values):
+            xy_max = max(xy_string_values)
+        else: # if no resource information, then xy_string_values for e.g. xy = 'rr' will be an empty list
+            xy_max = 0
         if xy_max > 0:
             # true iff there is at least one component pair with link > 0, otherwise no need to normalize
             link_dict[xy_string] = {pair: link_dict[xy_string][pair] / xy_max for pair in link_dict[xy_string].keys()}

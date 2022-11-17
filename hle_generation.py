@@ -117,7 +117,9 @@ def hle_window(traffic_type, window, eval_hlf_all, comp_type_dict, all_measure_t
         if class_v in traffic_type:
             hle = (measure, entity, class_v, hlf_value, entity_type)
             hle_w.append(hle)
-            frequencies_last[hlf[:3]] += 1  # only the first three entries determine the high-level activity
+            # only the first three entries (measure, entity, traffic type) determine the high-level activity
+            hla = hle[:3]
+            frequencies_last[hla] += 1
 
     return hle_w, frequencies_last
 
@@ -155,7 +157,7 @@ def filter_hla(freq_dict, freq_thresh):
         # print("Are:", sizes_new)
         return hla_filtered
 
-    elif freq_thresh > 1: # a freq_thresh=7 requests selecting the seven most frequent high-level activities
+    elif freq_thresh > 1:  # a freq_thresh=7 requests selecting the seven most frequent high-level activities
         most_frequent = sorted(freq_dict.keys(), key=lambda x: freq_dict[x])[:freq_thresh]
         #sizes_new = sum([freq_dict[hla] for hla in most_frequent])
 

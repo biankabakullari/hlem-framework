@@ -4,10 +4,7 @@ import pm4py
 import math
 
 
-DEFAULT_HLF = frozenset(['exec', 'enter', 'wt', 'wl'])
-
-
-def main(path, traffic_type='High', hlf_selected=DEFAULT_HLF, p=80, connection_thresh=0, res_info=True, freq=0,
+def main(path, traffic_type='High', hlf_selected=hlem.DEFAULT_HLF, p=90, connection_thresh=0.5, res_info=True, freq=0,
          only_comp=False, act_selection='all', res_selection='all', seg_method='df', flatten=False):
     """
 
@@ -39,7 +36,7 @@ def main(path, traffic_type='High', hlf_selected=DEFAULT_HLF, p=80, connection_t
     ts_first = log[0][0]['time:timestamp']
     last_trace = log[len(log)-1]
     ts_last = log[len(log)-1][len(last_trace)-1]['time:timestamp']
-    seconds_total = (ts_last-ts_first).total_seconds()
+    #seconds_total = (ts_last-ts_first).total_seconds()
     #no_windows = 6 * (seconds_total / 3600)  # used in the evaluation of the simulated log
     no_windows = math.ceil(math.sqrt(no_events))
     hl_log, df = hlem.transform_log_to_hl_log_width(log, no_windows, traffic_type, hlf_selected, p, connection_thresh,
@@ -51,5 +48,5 @@ def main(path, traffic_type='High', hlf_selected=DEFAULT_HLF, p=80, connection_t
 
 if __name__ == '__main__':
     current_dir = os.path.dirname(__file__)
-    my_path = os.path.join(current_dir, 'simulation.xes')
+    my_path = os.path.join(current_dir, "event_logs/running-example.xes")
     main(path=my_path)

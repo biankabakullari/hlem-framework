@@ -84,18 +84,17 @@ def window_events_dict(event_dict, window_size):
 
     # initially, each window is empty
     # some windows might remain empty, but we still want them to exist
-    w_events_list = dict.fromkeys(list(w_borders_dict.keys()), [])
+    w_events_list = {w: [] for w in list(w_borders_dict.keys())}
 
     #assign corresponding frame to each event
-    id_window_mapping = dict.fromkeys(list(event_dict.keys()), 0)
+    id_window_mapping = {ev: 0 for ev in list(event_dict.keys())}
 
     current_window = 0
-    max_window = max([bucketId for bucketId in w_events_list.keys()])
+    max_window = max([windowId for windowId in w_events_list.keys()])
     current_borders = w_borders_dict[current_window]
 
     for ev_id in ids_sorted:
         current_ts = event_dict[ev_id]['ts']
-
         # as long as current timestamp is higher than right border, go to next window
         while current_ts >= current_borders[1] and current_window < max_window:
             current_window += 1

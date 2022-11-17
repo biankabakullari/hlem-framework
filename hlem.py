@@ -5,9 +5,10 @@ import frames
 import feature_eval
 import hle_generation as hle_gen
 import correlation
-import hl_log_po
-import hl_log_flat
+import hl_log
 from datetime import timezone
+
+DEFAULT_HLF = frozenset(['exec', 'enter', 'wt', 'wl'])
 
 
 def transform_log_to_hl_log_width(log, number, traffic_type, selected_f_list, p, connection_thresh, res_info, freq,
@@ -51,11 +52,7 @@ def transform_log_to_hl_log_width(log, number, traffic_type, selected_f_list, p,
     # tz_info = first_ts.tzinfo
     tz_info = timezone.utc
     print('Generating high-level log and dataframe')
-    if flatten:
-        hl_log, hl_log_df = hl_log_flat.generate_hl_log(w_events_list, hle_all_windows, cascade_dict, tz_info,
-                                                        hla_list_filtered, only_component)
-    else:
-        hl_log, hl_log_df = hl_log_po.generate_hl_log(w_events_list, hle_all_windows, cascade_dict, tz_info,
-                                                      hla_list_filtered, only_component)
+    hl_log_xes, hl_log_df = hl_log.generate_hl_log(window_borders_dict, hle_all_windows, cascade_dict, tz_info,
+                                                   hla_list_filtered, only_component, flatten)
 
-    return hl_log, hl_log_df
+    return hl_log_xes, hl_log_df
