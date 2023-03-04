@@ -1,24 +1,5 @@
-from datetime import datetime, timezone
 import itertools as it
-
-
-def ts_to_int(datetime_ts):
-    """
-    mapping timestamps onto numbers, here: #seconds elapsed from the Unix time
-    """
-    if isinstance(datetime_ts, str):
-        datetime_ts = datetime.strptime(datetime_ts, '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
-    int_ts = (datetime_ts - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds()
-    try:
-        int_ts < 0
-    except ValueError:
-        print("There are events in the data that have happened prior to January 1, 1970.")
-    return int_ts
-
-
-def int_to_ts(int_number, tz_info):
-    timestamp = datetime.fromtimestamp(int_number, tz_info)
-    return timestamp
+import frames
 
 
 def df_po_trace(trace):
@@ -77,7 +58,7 @@ def directly_follows(trace):
         return [(trace[0])]
 
     else:
-        ts_set = set([ts_to_int(event['time:timestamp']) for event in trace])
+        ts_set = set([frames.seconds_since_epoch(event['time:timestamp']) for event in trace])
         if len(ts_set) < n:  # trace contains less unique ts than events, so trace has events with identical ts
             df_indices = df_po_trace(trace)
 
@@ -98,7 +79,7 @@ def log_steps(log, method):
     :return: a dictionary, each trace position in the log is the key, and attributes are its length and its steps
     """
     trace_pairs_dict = {}
-    if method == "mf":
+    if method != "df":
         pass
     else:
         for t_index, trace in enumerate(log):
@@ -151,19 +132,23 @@ def trig_rel_dicts(log, method):
 def event_dic_with_resource(log):
     """
     returns a dictionary where each key is a number uniquely identifying some event from the log, the value is a
-    dictionary containing the attribute values for the activity, timestamp, resource. The value of 'single' is True iff
-    the event is the only one recorded for the corresponding trace.
+    dictionary containing the attribute values for the case, activity, timestamp, resource. The value of 'single' is
+    True iff the event is the only one recorded for the corresponding trace.
     """
     event_dic = {}
     pos = 0
     for trace in log:
         n = len(trace)
+        case = trace.attributes['concept:name']
+
         for i in range(n):
             event = trace[i]
             act = event['concept:name']
-            ts = ts_to_int(event['time:timestamp'])
+            ts = event['time:timestamp']
+            ts_seconds = frames.seconds_since_epoch(ts)
             res = event['org:resource']
-            event_dic[pos + i] = {'act': act, 'ts': ts, 'res': res, 'single': False}
+            event_dic[pos + i] = {'case': case, 'act': act, 'ts': ts, 'ts-seconds': ts_seconds, 'res': res,
+                                  'single': False}
         if n == 1:
             event_dic[pos]['single'] = True
         pos += n
@@ -181,11 +166,14 @@ def event_dic_wo_resource(log):
     pos = 0
     for trace in log:
         n = len(trace)
+        case = trace.attributes['concept:name']
+
         for i in range(n):
             event = trace[i]
             act = event['concept:name']
-            ts = ts_to_int(event['time:timestamp'])
-            event_dic[pos + i] = {'act': act, 'ts': ts, 'single': False}
+            ts = event['time:timestamp']
+            ts_seconds = frames.seconds_since_epoch(ts)
+            event_dic[pos + i] = {'case': case, 'act': act, 'ts': ts, 'ts-seconds': ts_seconds, 'single': False}
         if n == 1:
             event_dic[pos]['single'] = True
         pos += n

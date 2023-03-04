@@ -46,96 +46,234 @@ def class_value(value, low, high):
         return "Normal"
 
 
-def get_all_feature_values(eval_hlf_complete):
-    feature_values = {}
-
-    for w in eval_hlf_complete.keys():
-        eval_w = eval_hlf_complete[w]
-        for hlf in eval_w.keys():
-            v = eval_w[hlf]
-            if hlf in feature_values.keys():
-                feature_values[hlf].append(v)
-            else:
-                feature_values[hlf] = [v]
-
-    return feature_values
-
-
-def get_eval_values_per_measure(eval_hlf_complete, comp_type_dict):
+def get_eval_list_per_hlf(eval_complete):
     """
-    Computes for each measure (e.g. exec, wl, progress) the list of all measured values across the different entities
+    Computes for each hlf (e.g. exec-a, busy-Jane, cross-ab) the list of all measured values across the different
+    windows
+    """
+    hlf_values = {}
+
+    for theta in eval_complete.keys():
+        eval_theta = eval_complete[theta]
+        for hlf in eval_theta.keys():
+            val = eval_theta[hlf]
+            if hlf in hlf_values.keys():
+                hlf_values[hlf].append(val)
+            else:
+                hlf_values[hlf] = [val]
+
+    return hlf_values
+
+
+def get_hlf_thresholds(eval_all, p):
+    """
+    Computes for each list of values recorded for the same hlf (e.g. exec-a, wl-Jane, progress-ab) the p-th percentile.
+    """
+    all_hlf_thresh = {}
+    all_hlf_values = get_eval_list_per_hlf(eval_all)
+
+    for hlf in all_hlf_values.keys():
+        f_type = hlf[0]
+        this_hlf_values = all_hlf_values[hlf]
+        if f_type == 'delay':
+            p_hard_set = 0.7
+            # note that each entry is a pair (# windows distance, # steps)
+            window_deltas = [entry[0] for entry in this_hlf_values]
+            low, high = get_thresholds(window_deltas, p_hard_set)
+        else:
+            low, high = get_thresholds(this_hlf_values, p)
+        all_hlf_thresh[hlf] = (low, high)
+
+    return all_hlf_thresh
+
+
+# traffic_type must be [High], [Low], or [High, Low]
+def hle_theta_by_hlf(event_dict, traffic_type, theta, eval_complete, instance_hlf_complete, comp_type_dict,
+                     all_hlf_thresholds, frequencies_last, id_counter, last_case_set_dic):
+
+    hle_theta_dic = {}
+    eval_at_theta = eval_complete[theta]
+    # i = 0  # the id of the generated hle within the theta
+    for hlf in eval_at_theta.keys():
+        hlf_value = eval_at_theta[hlf]  # this is a pair (window delta, no. instances) for f-type = 'delay'
+        f_type = hlf[0]  # e.g. busy
+        entity = hlf[1]  # e.g. Jane
+        entity_comp = comp_type_dict[entity]
+        low, high = all_hlf_thresholds[hlf]
+        if f_type == 'delay':
+            class_v = class_value(hlf_value[0], low, high)
+        else:
+            class_v = class_value(hlf_value, low, high)
+        if class_v in traffic_type:
+            if f_type == 'delay':
+                no_windows = hlf_value[0]
+                no_instances = hlf_value[1]
+                if no_instances >= 10:
+                    hle = {'f-type': f_type, 'entity': entity, 'class': class_v, 'value': (no_windows, no_instances),
+                           'component': entity_comp, 'theta': theta}
+                else:
+                    continue
+            # hle = (f_type, entity, class_v, hlf_value, entity_comp)
+            # hle_theta.append(hle)
+            else:
+                hle = {'f-type': f_type, 'entity': entity, 'class': class_v, 'value': hlf_value,
+                       'component': entity_comp, 'theta': theta}
+            hle_theta_dic[id_counter] = hle
+            instance_list = instance_hlf_complete[theta][hlf]
+            last_case_set_dic[id_counter] = get_case_set(instance_list, event_dict)
+            # only the first three entries (f_type, entity, traffic type) determine the high-level activity
+            hla = (f_type, entity, class_v)
+            frequencies_last[hla] += 1
+            id_counter += 1
+    return hle_theta_dic, frequencies_last, id_counter, last_case_set_dic
+
+
+def get_eval_list_per_type(eval_complete, comp_type_dict):
+    """
+    Computes for each f-type (e.g. exec, busy, cross) the list of all measured values across the different entities
     (e.g. all 'exec-a' values for any a from the activity set)
     """
-    eval_values_measure = {}  # e.g. feature_values_type[('activity', 'exec')] = [...]
+    eval_list_type = {}  # e.g. feature_values_type[('activity', 'exec')] = [...]
 
-    for w in eval_hlf_complete.keys():
-        eval_w = eval_hlf_complete[w]
-        for hlf in eval_w.keys():
-            measure = hlf[0]
+    for theta in eval_complete.keys():
+        eval_theta = eval_complete[theta]
+        for hlf in eval_theta.keys():
+            f_type = hlf[0]
             entity = hlf[1]
-            entity_type = comp_type_dict[entity]
-            type_measure_pair = (entity_type, measure)
-            v = eval_w[hlf]
-            if type_measure_pair in eval_values_measure.keys():
-                eval_values_measure[type_measure_pair].append(v)
+            component = comp_type_dict[entity]
+            type_component_pair = (f_type, component)
+            val = eval_theta[hlf]
+            if type_component_pair in eval_list_type.keys():
+                eval_list_type[type_component_pair].append(val)
             else:
-                eval_values_measure[type_measure_pair] = [v]
+                eval_list_type[type_component_pair] = [val]
 
-    return eval_values_measure
+    return eval_list_type
 
 
-def get_measure_thresholds(eval_all, comp_type_dict, p):
+def get_type_thresholds(eval_all, comp_type_dict, p):
     """
     Computes for each measure (e.g. exec, wl, progress) the p-th percentile.
     The threshold is determined for each measure: e.g. the 80th percentile over all 'exec-a' values measured over all a
     from the activity set).
     """
-    all_measures_thresh = {}
-    all_measures_values = get_eval_values_per_measure(eval_all, comp_type_dict)
+    all_types_thresh = {}
+    all_types_values = get_eval_list_per_type(eval_all, comp_type_dict)
 
-    for type_measure_pair in all_measures_values.keys():
-        type_measure_values = all_measures_values[type_measure_pair]
-        low, high = get_thresholds(type_measure_values, p)
-        all_measures_thresh[type_measure_pair] = (low, high)
+    for type_comp_pair in all_types_values.keys():
+        f_type = type_comp_pair[0]
+        type_comp_values = all_types_values[type_comp_pair]
+        if f_type == 'delay':
+            p_hard_set = 0.7
+            # note that each entry is a pair (# windows distance, # steps)
+            window_deltas = [entry[0] for entry in type_comp_values]
+            low, high = get_thresholds(window_deltas, p_hard_set)
+        else:
+            low, high = get_thresholds(type_comp_values, p)
+        all_types_thresh[type_comp_pair] = (low, high)
 
-    return all_measures_thresh
+    return all_types_thresh
+
+
+def get_case_set(instance_list, event_dict):
+    case_list = []
+    for entry in instance_list:
+        if len(entry) == 1:
+            case_id = event_dict[entry]['case']
+        else:  # each entry is an event pair
+            event = entry[0]  # both events have same case id, so it doesn't matter which one we take
+            case_id = event_dict[event]['case']
+        case_list.append(case_id)
+    return set(case_list)
 
 
 # traffic_type must be [High], [Low], or [High, Low]
-def hle_window(traffic_type, window, eval_hlf_all, comp_type_dict, all_measure_thresholds, frequencies_last):
+def hle_theta_by_type(event_dict, traffic_type, theta, eval_complete, instance_hlf_complete, comp_type_dict,
+                      all_types_thresholds, frequencies_last, id_counter, last_case_set_dic):
 
-    hle_w = []
-    eval_hlf_window = eval_hlf_all[window]
-    for hlf in eval_hlf_window.keys():
-        hlf_value = eval_hlf_window[hlf]
-        measure = hlf[0]  # e.g. wl
+    hle_theta_dic = {}
+    eval_at_theta = eval_complete[theta]
+    # i = 0  # the id of the generated hle within the theta
+    for hlf in eval_at_theta.keys():
+        hlf_value = eval_at_theta[hlf]  # this is a pair (window delta, no. instances) for f-type = 'delay'
+        f_type = hlf[0]  # e.g. busy
         entity = hlf[1]  # e.g. Jane
-        entity_type = comp_type_dict[entity]
-        type_measure_pair = (entity_type, measure)
-        low, high = all_measure_thresholds[type_measure_pair]
-        class_v = class_value(hlf_value, low, high)
+        entity_comp = comp_type_dict[entity]
+        type_comp_pair = (f_type, entity_comp)
+        low, high = all_types_thresholds[type_comp_pair]
+        if f_type == 'delay':
+            class_v = class_value(hlf_value[0], low, high)
+        else:
+            class_v = class_value(hlf_value, low, high)
+
         if class_v in traffic_type:
-            hle = (measure, entity, class_v, hlf_value, entity_type)
-            hle_w.append(hle)
-            # only the first three entries (measure, entity, traffic type) determine the high-level activity
-            hla = hle[:3]
+            if f_type == 'delay':
+                no_windows = hlf_value[0]
+                no_instances = hlf_value[1]
+                if no_instances >= 10:  # only considering bundles that are big enough
+                    hle = {'f-type': f_type, 'entity': entity, 'class': class_v, 'value': (no_windows, no_instances),
+                           'component': entity_comp, 'theta': theta}
+                else:
+                    continue
+            # hle = (f_type, entity, class_v, hlf_value, entity_comp)
+            # hle_theta.append(hle)
+            else:
+                hle = {'f-type': f_type, 'entity': entity, 'class': class_v, 'value': hlf_value,
+                       'component': entity_comp, 'theta': theta}
+            hle_theta_dic[id_counter] = hle
+            instance_list = instance_hlf_complete[theta][hlf]
+            last_case_set_dic[id_counter] = get_case_set(instance_list, event_dict)
+            # only the first three entries (f_type, entity, traffic type) determine the high-level activity
+            hla = (f_type, entity, class_v)
             frequencies_last[hla] += 1
+            id_counter += 1
+    return hle_theta_dic, frequencies_last, id_counter, last_case_set_dic
 
-    return hle_w, frequencies_last
 
+def hle_all(event_dict, traffic_type, eval_complete, instance_hlf_complete, comp_type_dict, p, type_based):
 
-def hle_all_windows(traffic_type, eval_hlf_all, comp_type_dict, p):
-    hle_all = {}
+    hle_all_dic = {}
+    hle_all_by_theta = {}
+    last_case_set_dic = {}
+
     hla_frequencies = defaultdict(lambda: 0)
-    all_measure_thresholds = get_measure_thresholds(eval_hlf_all, comp_type_dict, p)
     last_freq = hla_frequencies
+    id_counter = 0
 
-    for w in eval_hlf_all.keys():
-        hle_all[w], last_freq_updated = hle_window(traffic_type, w, eval_hlf_all, comp_type_dict,
-                                                   all_measure_thresholds, last_freq)
-        last_freq = last_freq_updated
-
-    return hle_all, last_freq
+    if type_based:
+        type_thresholds = get_type_thresholds(eval_complete, comp_type_dict, p)
+        for theta in eval_complete.keys():
+            hle_theta_dic, last_freq_updated, id_counter, case_set_dic = hle_theta_by_type(event_dict, traffic_type,
+                                                                                           theta, eval_complete,
+                                                                                           instance_hlf_complete,
+                                                                                           comp_type_dict,
+                                                                                           type_thresholds, last_freq,
+                                                                                           id_counter,
+                                                                                           last_case_set_dic)
+            last_case_set_dic = case_set_dic
+            last_freq = last_freq_updated
+            hle_all_by_theta[theta] = hle_theta_dic
+            for hle_id in hle_theta_dic.keys():
+                hle = hle_theta_dic[hle_id]
+                hle_all_dic[hle_id] = hle
+    else:
+        hlf_thresholds = get_hlf_thresholds(eval_complete, p)
+        for theta in eval_complete.keys():
+            hle_theta_dic, last_freq_updated, id_counter, case_set_dic = hle_theta_by_hlf(event_dict, traffic_type,
+                                                                                          theta, eval_complete,
+                                                                                          instance_hlf_complete,
+                                                                                          comp_type_dict,
+                                                                                          hlf_thresholds, last_freq,
+                                                                                          id_counter, last_case_set_dic)
+            last_case_set_dic = case_set_dic
+            last_freq = last_freq_updated
+            hle_all_by_theta[theta] = hle_theta_dic
+            for hle_id in hle_theta_dic.keys():
+                hle = hle_theta_dic[hle_id]
+                hle_all_dic[hle_id] = hle
+    no_hle = len(hle_all_dic.keys())
+    print('We detected ' + str(no_hle) + ' high-level events.')
+    return hle_all_dic, hle_all_by_theta, last_freq, last_case_set_dic
 
 
 def filter_hla(freq_dict, freq_thresh):

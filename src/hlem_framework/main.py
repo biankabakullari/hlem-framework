@@ -31,6 +31,7 @@ def main(path, traffic_type='High', hlf_selected=hlem.DEFAULT_HLF, p=90, connect
     the set of the high-level activity labels)
     :return: a (high-level) event log
     """
+
     log = pm4py.read_xes(path)
     no_events = sum([len(trace) for trace in log])
     ts_first = log[0][0]['time:timestamp']
@@ -39,7 +40,8 @@ def main(path, traffic_type='High', hlf_selected=hlem.DEFAULT_HLF, p=90, connect
     #seconds_total = (ts_last-ts_first).total_seconds()
     #no_windows = 6 * (seconds_total / 3600)  # used in the evaluation of the simulated log
     no_windows = math.ceil(math.sqrt(no_events))
-    hl_log, df = hlem.transform_log_to_hl_log_width(log, no_windows, traffic_type, hlf_selected, p, connection_thresh,
+    frame = 'hours'
+    hl_log, df = hlem.transform_log_to_hl_log_width(log, frame, traffic_type, hlf_selected, p, connection_thresh,
                                                     res_info, freq, only_comp, act_selection, res_selection, seg_method,
                                                     flatten)
 
@@ -47,6 +49,13 @@ def main(path, traffic_type='High', hlf_selected=hlem.DEFAULT_HLF, p=90, connect
 
 
 if __name__ == '__main__':
-    current_dir = os.path.dirname(__file__)
+    #current_dir = os.path.dirname(__file__)
+    #print("current_dir:", current_dir)
+    #print("Current directory:", os.path.abspath(os.curdir))
+    os.chdir("..")
+    os.chdir("..")
+    #print("Other directory:", os.path.abspath(os.curdir))
+    current_dir = os.path.abspath(os.curdir)
     my_path = os.path.join(current_dir, "event_logs/running-example.xes")
+    #print("my_path:", my_path)
     main(path=my_path)

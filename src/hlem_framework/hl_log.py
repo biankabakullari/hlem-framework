@@ -2,7 +2,7 @@ import pandas as pd
 import os
 from pm4py.objects.conversion.log import converter as log_converter
 from pm4py.objects.log.exporter.xes import exporter as xes_exporter
-import preprocess
+import frames
 
 
 def create_hle_table(case_column, activity_column, timestamp_column, value_column, comp_type_column):
@@ -27,8 +27,8 @@ def hla_to_string(hla_triple, only_component):
 
     if not only_component:
         measure_string = str(measure)
-        if measure_string == 'wt':
-            measure_string = 'delay'
+        #if measure_string == 'wt':
+            #measure_string = 'delay'
         hla_string_list.append(measure_string)
         traffic_string = str(traffic_type)
         hla_string_list.append(traffic_string)
@@ -38,7 +38,7 @@ def hla_to_string(hla_triple, only_component):
     return hla_string
 
 
-def get_table_data_po(window_border_dict, hle_all, cascade_dict, tz_info, hla_filtered, only_component):
+def get_table_data_po(window_border_dict, hle_all_by_theta, cascade_dict, tz_info, hla_filtered, only_component):
 
     case_column = []
     activity_column = []
@@ -48,15 +48,16 @@ def get_table_data_po(window_border_dict, hle_all, cascade_dict, tz_info, hla_fi
 
     for w in window_border_dict.keys():
         w_start_int = window_border_dict[w][0]
-        w_start_ts = preprocess.int_to_ts(w_start_int, tz_info)
-        hle_w = hle_all[w]
-        for i, hle in enumerate(hle_w):
-            hla = hle[:3]  # (measure, entity, traffic type)
+        w_start_ts = frames.seconds_to_datetime(w_start_int, tz_info)
+        hle_w = hle_all_by_theta[w]
+        for hle_id in hle_w.keys():
+            hle = hle_w[hle_id]
+            hla = (hle['f-type'], hle['entity'], hle['class'])  # (measure, entity, traffic type)
             if hla in hla_filtered:
-                case_id = cascade_dict[(w, i)]
+                case_id = cascade_dict[(w, hle_id)]
                 hla_string = hla_to_string(hla, only_component)
-                val = hle[3]
-                comp_type = hle[4]
+                val = hle['value']
+                comp_type = hle['component']
                 case_column.append(case_id)
                 activity_column.append(hla_string)
                 timestamp_column.append(w_start_ts)
@@ -66,7 +67,7 @@ def get_table_data_po(window_border_dict, hle_all, cascade_dict, tz_info, hla_fi
     return case_column, activity_column, timestamp_column, value_column, comp_type_column
 
 
-def get_table_data_flat(window_border_dict, hle_all, cascade_dict, tz_info, hla_filtered, only_component):
+def get_table_data_flat(window_border_dict, hle_all_by_theta, cascade_dict, tz_info, hla_filtered, only_component):
 
     case_column = []
     activity_column = []
@@ -76,39 +77,45 @@ def get_table_data_flat(window_border_dict, hle_all, cascade_dict, tz_info, hla_
 
     time_granularity_int = window_border_dict[0][1] - window_border_dict[0][0]  # window width
     windows = list(window_border_dict.keys())
-    print(window_border_dict)
+    # print(window_border_dict)
     for w in windows:
-        w_time_int = window_border_dict[w][0]
-        hle_w_all = hle_all[w]
-        hle_w = [hle for hle in hle_w_all if hle[:3] in hla_filtered]
-        if len(hle_w) == 1:
-            hle_0 = hle_w[0]
-            hla_0 = hle_0[:3]
-            case_id = cascade_dict[(w, 0)]
+        left_border_in_seconds = window_border_dict[w][0]
+        hle_w_all = hle_all_by_theta[w]
+        hle_ids_w_filtered = [hle_id for hle_id in hle_w_all.keys() if (hle_w_all[hle_id]['f-type'],
+                                                                        hle_w_all[hle_id]['entity'],
+                                                                        hle_w_all[hle_id]['class']) in hla_filtered]
+        if len(hle_ids_w_filtered) == 1:
+            id_0 = hle_ids_w_filtered[0]
+            hle_0 = hle_w_all[id_0]
+            hla_0 = (hle_0['f-type'], hle_0['entity'], hle_0['class'])
+            case_id = cascade_dict[(w, id_0)]
             hla_string = hla_to_string(hla_0, only_component)
-            val = hle_0[3]
-            comp_type = hle_0[4]
+            val = hle_0['value']
+            comp_type = hle_0['component']
             case_column.append(case_id)
             activity_column.append(hla_string)
-            w_time_ts = preprocess.int_to_ts(w_time_int, tz_info)
+            w_time_ts = frames.seconds_to_datetime(left_border_in_seconds, tz_info)
             timestamp_column.append(w_time_ts)
             value_column.append(val)
             comp_type_column.append(comp_type)
         else:
-            hla_strings = [hla_to_string(hle[:3], only_component) for hle in hle_w]
+            hle_w_filtered = [hle_w_all[hle_id] for hle_id in hle_ids_w_filtered]
+            hla_triples = [(hle['f-type'], hle['entity'], hle['class']) for hle in hle_w_filtered]
+            hla_strings = [hla_to_string(hla, only_component) for hla in hla_triples]
             hla_strings.sort()
             # hla_strings.reverse()
             number = len(hla_strings)
-            for i, hle in enumerate(hle_w):
-                case_id = cascade_dict[(w, i)]
+            for i, hle_id in enumerate(hle_ids_w_filtered):
+                case_id = cascade_dict[(w, hle_id)]
                 case_column.append(case_id)
                 activity_column.append(hla_strings[i])
                 # if there are 5 events, they will get timestamps start + 0, ,...., start + 4/5*window_width
-                w_hla_int = w_time_int + ((i/number)*time_granularity_int)
-                w_time_ts = preprocess.int_to_ts(w_hla_int, tz_info)
+                w_hla_int = left_border_in_seconds + ((i/number)*time_granularity_int)
+                w_time_ts = frames.seconds_to_datetime(w_hla_int, tz_info)
                 timestamp_column.append(w_time_ts)
-                val = hle[3]
-                comp_type = hle[4]
+                hle = hle_w_all[hle_id]
+                val = hle['value']
+                comp_type = hle['component']
                 value_column.append(val)
                 comp_type_column.append(comp_type)
 
