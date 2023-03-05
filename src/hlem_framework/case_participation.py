@@ -62,6 +62,29 @@ def get_cf_dict(log):
     return cf_dict
 
 
+
+def get_hle_path_cases_single(hle_path, case_set_dic):
+    common_cases = case_set_dic[hle_path[0]]
+    for node in hle_path[1:]:
+        common_cases = common_cases.intersection(case_set_dic[node])
+        if not common_cases:
+            return common_cases
+    return common_cases
+
+
+class CasesLazyDict:
+    def __init__(self, hle_paths, case_set_dic):
+        self.hle_paths = hle_paths
+        self.case_set_dic = case_set_dic
+
+    def __len__(self):
+        return len(self.hle_paths)
+
+    def __getitem__(self, index):
+        path = self.hle_paths[index]
+        return get_hle_path_cases_single(path, self.case_set_dic)
+
+
 def get_hle_paths_cases(hle_paths, case_set_dic, lazy=False):
     if lazy:
         return CasesLazyDict(hle_paths, case_set_dic)

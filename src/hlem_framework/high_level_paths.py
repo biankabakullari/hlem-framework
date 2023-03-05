@@ -27,12 +27,15 @@ def find_neighbours_with_sufficient_overlap(digraph, cases_dic, co_path_thresh, 
 # the function returns two lists
 # first list: all paths starting from node from_node
 # second list: the common case set of each path in the first list
-def find_paths(digraph, cases_dic, co_path_thresh, from_node, cases_until_node, visited):
+# visited: start is always already in visited
+def find_paths(digraph, cases_dic, co_path_thresh, from_node, cases_until_node, visited, only_maximal):
     paths = []
-    case_sets_of_paths = []
-    maximal_paths = []
-    case_sets_of_maximal_paths = []
-    neighbors = digraph.neighbors(from_node)
+
+    neighbors = find_neighbours_with_sufficient_overlap(digraph, cases_dic, co_path_thresh, from_node, cases_until_node, visited)
+
+    if not neighbors:
+        return [tuple(visited)]
+
     for neighbor in neighbors:
         if not only_maximal:
             paths.append((from_node, neighbor))
@@ -48,10 +51,9 @@ def find_paths(digraph, cases_dic, co_path_thresh, from_node, cases_until_node, 
 # the following function returns two lists
 # first list: all paths of high-level events
 # second list: the common case set of each path in the first list
-def hle_co_paths(digraph, case_set_dic, co_thresh, co_path_thresh):
+def hle_co_paths(digraph, case_set_dic, co_thresh, co_path_thresh, maximal_only):
 
     paths_with_case_overlap = []
-    cases_of_paths = []
     arcs = digraph.edges()
 
     digraph_copy = digraph.copy()
@@ -76,7 +78,7 @@ def hle_co_paths(digraph, case_set_dic, co_thresh, co_path_thresh):
             paths_with_case_overlap += paths
             pbar.update()
 
-    return paths_with_case_overlap, cases_of_paths
+    return paths_with_case_overlap
 
 
 # returns True only if path2 is an extension of path1, that is, if the first part of path2 is exactly path1
@@ -95,28 +97,10 @@ def extends(path1, path2):
         return True
 
 
-
-
-def get_maximal_paths(hle_paths, hle_cases):
-    non_maximal_indices = []
-    maximal_paths = []
-    maximal_cases = []
-    no_hle_paths = len(hle_paths)
-    for i, path1 in enumerate(hle_paths):
-        print('Checking maximality for ' + str(i) + '/' + str(no_hle_paths) + ' hle paths.')
-        for path2 in hle_paths:
-            #print("Path1: ", path1)
-            #print("Path2: ", path2)
-            #print("Is subsequence: ", subsequence_of(path1, path2))
-            if extends(path1, path2):
-                non_maximal_indices.append(i)
-
-    for i, path in enumerate(hle_paths):
-        if i not in non_maximal_indices:
-            maximal_paths.append(path)
-            maximal_cases.append(hle_cases[i])
-
-    return maximal_paths, maximal_cases
+def get_maximal_paths(hle_paths):
+    root = trie.build_trie(hle_paths)
+    maximal_paths = trie.find_leaves(root)
+    return maximal_paths
 
 
 # given a sequence of high-level events (which are unique), the function projects each entry onto its high-level
@@ -136,12 +120,8 @@ def hle_sequence_to_hla_sequence(hle_sequence, hle_all):
 # first list: all paths of high-level activities (each hle path is projected onto a hla path)
 # second list: the common case set of each hla path in the first list
 # third list:
-def hla_co_paths(hle_all, hle_sequences, case_sequences_of_hle):
-    hla_sequences = []
-    case_sequences_of_hla = []
-    frequencies = []
-    no_hle_paths = len(hle_sequences)
-    if len(hle_sequences) > 0:
+def hla_co_paths_batch(hle_all, i_start, i_end, hle_sequences, case_sequences_of_hle):
+    hla_sequences = dict()
 
     for i in range(i_start, min(i_end, len(hle_sequences))):
         hla_sequence = hle_sequence_to_hla_sequence(hle_sequences[i], hle_all)
@@ -152,4 +132,26 @@ def hla_co_paths(hle_all, hle_sequences, case_sequences_of_hle):
             prev_freq, prev_cases = hla_sequences[hla_sequence]
             hla_sequences[hla_sequence] = (prev_freq + 1), prev_cases.union(cases_of_sequence_i)
 
-    return hla_sequences, case_sequences_of_hla, frequencies
+    return hla_sequences
+
+
+def hla_co_paths(hle_all, hle_sequences, case_sequences_of_hle):
+    pool = ThreadPool()
+
+    batch_size = 100
+    num_batches = int(math.ceil(len(hle_sequences) / batch_size))
+
+    result = dict()
+
+    with tqdm(desc='Parallel hle to hla paths (batches)', total=num_batches) as pbar:
+        for partial_result in pool.imap_unordered(lambda params: hla_co_paths_batch(*params), [
+            (hle_all, i * batch_size, (i + 1) * batch_size, hle_sequences, case_sequences_of_hle)
+            for i in range(num_batches)
+        ]):
+            for hla_seq, (freq, cases) in partial_result.items():
+                prev_freq, prev_cases = result.get(hla_seq, (0, set()))
+                result[hla_seq] = prev_freq + freq, cases | prev_cases
+            pbar.update()
+
+    return result
+

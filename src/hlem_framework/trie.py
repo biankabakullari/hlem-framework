@@ -23,12 +23,10 @@ def find_leaves(trie):
 
 
 if __name__ == '__main__':
-    trie = build_trie([
-        [1, 2, 3],
-        [1, 2],
-        [1, 2, 3],
-        [2, 4],
-        [1, 2, 4]
-    ])
-    leaves = find_leaves(trie)
+    import pickle
+    with open(r'C:\Users\bakullari\Documents\hlem_framework\src\hlem_framework\maximal_paths.pickle', 'rb') as f:
+        (hle_paths, hle_cases) = pickle.load(f)
+
+    root = build_trie(hle_paths)
+    leaves = find_leaves(root)
     print(leaves)

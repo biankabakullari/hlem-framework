@@ -1,6 +1,8 @@
 import os
 import math
 import pickle
+from datetime import datetime
+import logging
 import pm4py
 import preprocess
 import component
