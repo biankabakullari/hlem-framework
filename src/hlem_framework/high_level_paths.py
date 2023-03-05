@@ -1,4 +1,27 @@
+import math
+import os
+from multiprocessing.pool import ThreadPool
+from tqdm import tqdm
 import overlap
+import trie
+
+
+def find_neighbours_with_sufficient_overlap(digraph, cases_dic, co_path_thresh, from_node, cases_until_node, visited):
+    all_neighbors = digraph.neighbors(from_node)
+    neighbors = []
+
+    for neighbor in all_neighbors:
+        if neighbor in visited:
+            continue
+
+        cases_of_neighbor = cases_dic[neighbor]
+        overlap_set_with_neighbor = cases_until_node.intersection(cases_of_neighbor)
+        overlap_ratio_neighbor = len(overlap_set_with_neighbor) / len(cases_until_node.union(cases_of_neighbor))
+
+        if overlap_ratio_neighbor >= co_path_thresh:
+            neighbors.append(neighbor)
+
+    return neighbors
 
 
 # the function returns two lists
@@ -11,29 +34,15 @@ def find_paths(digraph, cases_dic, co_path_thresh, from_node, cases_until_node, 
     case_sets_of_maximal_paths = []
     neighbors = digraph.neighbors(from_node)
     for neighbor in neighbors:
-        if neighbor in visited:
-            print('Cycle detected')
-            continue
+        if not only_maximal:
+            paths.append((from_node, neighbor))
 
         cases_of_neighbor = cases_dic[neighbor]
         overlap_set_with_neighbor = cases_until_node.intersection(cases_of_neighbor)
-        overlap_ratio_neighbor = len(overlap_set_with_neighbor) / len(cases_until_node.union(cases_of_neighbor))
-        # TODO: maximal paths
-        if overlap_ratio_neighbor >= co_path_thresh:
-            paths.append([from_node, neighbor])
-            case_sets_of_paths.append(overlap_set_with_neighbor)
-            paths_from_neigh, case_sets_from_neigh = find_paths(digraph, cases_dic, co_path_thresh, neighbor,
-                                                                overlap_set_with_neighbor, [*visited, neighbor])
+        paths += find_paths(digraph, cases_dic, co_path_thresh, neighbor,
+                            overlap_set_with_neighbor, [*visited, neighbor], only_maximal)
 
-            for path in paths_from_neigh:
-                paths.append([from_node, *path])
-            for case_set in case_sets_from_neigh:
-                case_sets_of_paths.append(cases_until_node.intersection(case_set))
-        else:  # path is maximal
-            maximal_paths.append(visited)
-            case_sets_of_maximal_paths.append(cases_until_node)
-
-    return paths, case_sets_of_paths
+    return paths
 
 
 # the following function returns two lists
@@ -56,16 +65,16 @@ def hle_co_paths(digraph, case_set_dic, co_thresh, co_path_thresh):
                 digraph_copy.remove_edge(*arc)
 
     nodes = digraph_copy.nodes()
-    for node in nodes:
-        # single nodes are also paths
-        paths_with_case_overlap.append([node])
-        cases_node = case_set_dic[node]
-        cases_of_paths.append(cases_node)
-        # all paths from node of at least two elements
-        paths_from_node, cases_from_node = find_paths(digraph_copy, case_set_dic, co_path_thresh, node, cases_node,
-                                                      [node])
-        paths_with_case_overlap += paths_from_node
-        cases_of_paths += cases_from_node
+
+    pool = ThreadPool(processes=2 * os.cpu_count())
+
+    with tqdm(desc='Computing paths', total=len(nodes)) as pbar:
+        for paths in pool.imap_unordered(lambda args: find_paths(*args), [
+            [digraph_copy, case_set_dic, co_path_thresh, node, case_set_dic[node],
+            [node], maximal_only] for node in nodes
+        ], chunksize=1):
+            paths_with_case_overlap += paths
+            pbar.update()
 
     return paths_with_case_overlap, cases_of_paths
 
@@ -119,7 +128,8 @@ def hle_sequence_to_hla_sequence(hle_sequence, hle_all):
         entity = hle_all[hle]['entity']
         hla = (f_type, entity)
         hla_sequence.append(hla)
-    return hla_sequence
+
+    return tuple(hla_sequence)
 
 
 # the following function returns three lists
@@ -133,18 +143,13 @@ def hla_co_paths(hle_all, hle_sequences, case_sequences_of_hle):
     no_hle_paths = len(hle_sequences)
     if len(hle_sequences) > 0:
 
-        for i, hle_sequence in enumerate(hle_sequences):
-            print('Path ' + str(i) + '/' + str(no_hle_paths))
-            hla_sequence = hle_sequence_to_hla_sequence(hle_sequence, hle_all)
-            cases_of_sequence_i = case_sequences_of_hle[i]
-            if hla_sequence not in hla_sequences:  # the hle path is projected onto a new hla path not already inserted
-                hla_sequences.append(hla_sequence)
-                case_sequences_of_hla.append(cases_of_sequence_i)
-                frequencies.append(1)
-            else:  # the hle path is projected onto a hla path that is already inserted in the hla_sequences list
-                index = hla_sequences.index(hla_sequence)
-                previous_cases = case_sequences_of_hle[index]
-                case_sequences_of_hla[index] = previous_cases.union(cases_of_sequence_i)
-                frequencies[index] += 1
+    for i in range(i_start, min(i_end, len(hle_sequences))):
+        hla_sequence = hle_sequence_to_hla_sequence(hle_sequences[i], hle_all)
+        cases_of_sequence_i = case_sequences_of_hle[i]
+        if hla_sequence not in hla_sequences:  # the hle path is projected onto a new hla path not already inserted
+            hla_sequences[hla_sequence] = (1, cases_of_sequence_i)
+        else:  # the hle path is projected onto a hla path that is already inserted in the hla_sequences list
+            prev_freq, prev_cases = hla_sequences[hla_sequence]
+            hla_sequences[hla_sequence] = (prev_freq + 1), prev_cases.union(cases_of_sequence_i)
 
     return hla_sequences, case_sequences_of_hla, frequencies

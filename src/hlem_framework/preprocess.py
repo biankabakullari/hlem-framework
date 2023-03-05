@@ -137,17 +137,17 @@ def event_dic_with_resource(log):
     """
     event_dic = {}
     pos = 0
-    for trace in log:
+    for i, trace in enumerate(log):
         n = len(trace)
-        case = trace.attributes['concept:name']
-
-        for i in range(n):
-            event = trace[i]
+        #case = trace.attributes['concept:name']
+        case = i
+        for j in range(n):
+            event = trace[j]
             act = event['concept:name']
             ts = event['time:timestamp']
             ts_seconds = frames.seconds_since_epoch(ts)
             res = event['org:resource']
-            event_dic[pos + i] = {'case': case, 'act': act, 'ts': ts, 'ts-seconds': ts_seconds, 'res': res,
+            event_dic[pos + j] = {'case': case, 'act': act, 'ts': ts, 'ts-seconds': ts_seconds, 'res': res,
                                   'single': False}
         if n == 1:
             event_dic[pos]['single'] = True
@@ -164,16 +164,16 @@ def event_dic_wo_resource(log):
     """
     event_dic = {}
     pos = 0
-    for trace in log:
+    for i, trace in enumerate(log):
         n = len(trace)
-        case = trace.attributes['concept:name']
-
-        for i in range(n):
-            event = trace[i]
+        #case = trace.attributes['concept:name']
+        case = i
+        for j in range(n):
+            event = trace[j]
             act = event['concept:name']
             ts = event['time:timestamp']
             ts_seconds = frames.seconds_since_epoch(ts)
-            event_dic[pos + i] = {'case': case, 'act': act, 'ts': ts, 'ts-seconds': ts_seconds, 'single': False}
+            event_dic[pos + j] = {'case': case, 'act': act, 'ts': ts, 'ts-seconds': ts_seconds, 'single': False}
         if n == 1:
             event_dic[pos]['single'] = True
         pos += n
@@ -192,3 +192,5 @@ def event_dict(log, res_info):
         return event_dic_with_resource(log)
     else:
         return event_dic_wo_resource(log)
+
+

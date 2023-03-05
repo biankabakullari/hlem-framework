@@ -1,6 +1,7 @@
 from collections import defaultdict
 import high_level_paths as paths
 import networkx as nx
+from tqdm import tqdm
 
 
 def hle_set_by_case_dict(case_set_dic):
@@ -34,12 +35,9 @@ def is_subsequence(activity_sequence, trace):
 
 
 def is_subsequence_fast(activity_sequence, trace):
-    act_seq_str = ' '.join([str(act) for act in activity_sequence])
-    trace_str = ' '.join([str(act) for act in trace])
-    if len(activity_sequence) > len(trace):
-        return False
-    else:
-        return act_seq_str in trace_str
+    act_seq_str = '#'.join([str(act) for act in activity_sequence])
+    trace_str = '#'.join([str(act) for act in trace])
+    return act_seq_str in trace_str
 
 
 def project_path_onto_activity_sequence(hla_path):
@@ -52,16 +50,27 @@ def project_path_onto_activity_sequence(hla_path):
         segment = hla[1]
         second_activity = segment[1]
         projection.append(second_activity)
-    return projection
+    return tuple(projection)
 
 
 def get_cf_dict(log):
     cf_dict = dict()
-    for trace in log:
-        case_id = trace.attributes['concept:name']
+    for i, trace in enumerate(log):
+        # case_id = trace.attributes['concept:name']
         control_flow = [event['concept:name'] for event in trace]
-        cf_dict[case_id] = control_flow
+        cf_dict[i] = control_flow
     return cf_dict
+
+
+def get_hle_paths_cases(hle_paths, case_set_dic, lazy=False):
+    if lazy:
+        return CasesLazyDict(hle_paths, case_set_dic)
+
+    hle_paths_cases = []
+    for path in tqdm(hle_paths, desc='Computing case sets'):
+        cases = get_hle_path_cases_single(path, case_set_dic)
+        hle_paths_cases.append(cases)
+    return hle_paths_cases
 
 
 # returns set of case ids of all cases that traverse an activity sequence (underlying a hla path)
@@ -92,10 +101,9 @@ if __name__ == '__main__':
     co_thresh = 0.5
     co_path_thresh = 0.5
 
-    hle_sequences, hle_cases = paths.hle_co_paths(digraph, cases_dict, co_thresh, co_path_thresh)
-    hle_sequences, hle_cases = paths.get_maximal_paths(hle_sequences, hle_cases)
+    hle_sequences = paths.hle_co_paths(digraph, cases_dict, co_thresh, co_path_thresh, maximal_only=True)
+    hle_sequences = paths.get_maximal_paths(hle_sequences)
     print(hle_sequences)
-    print(hle_cases)
 
     hle_all = defaultdict(lambda: {})
     hle_all['A']['f-type'] = 'enter'

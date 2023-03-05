@@ -1,4 +1,5 @@
 from copy import deepcopy
+from tqdm import tqdm
 
 
 def init_instances(activity_set, resource_set, segment_set, frames, act_selected, res_selected, features_selected):
@@ -115,7 +116,7 @@ def instances_hlf(activity_set, resource_set, segment_set, event_dic, trig_dic, 
                         instance_hlf_w_complete[w_i][('busy', ri)].append(i)
                     # todor is left out as it remains 0
 
-    for i, j in id_pairs:
+    for i, j in tqdm(id_pairs, desc='Event pairs as instances'):
         id_pair = (i, j)
         w_i = id_window_mapping[i]
         w_j = id_window_mapping[j]

@@ -1,5 +1,6 @@
 import numpy as np
 from collections import defaultdict
+import logging
 
 
 def high_threshold(multiset, p):
@@ -272,7 +273,7 @@ def hle_all(event_dict, traffic_type, eval_complete, instance_hlf_complete, comp
                 hle = hle_theta_dic[hle_id]
                 hle_all_dic[hle_id] = hle
     no_hle = len(hle_all_dic.keys())
-    print('We detected ' + str(no_hle) + ' high-level events.')
+    logging.info('We detected ' + str(no_hle) + ' high-level events.')
     return hle_all_dic, hle_all_by_theta, last_freq, last_case_set_dic
 
 
