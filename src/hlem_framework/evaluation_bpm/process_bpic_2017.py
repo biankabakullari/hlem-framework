@@ -82,8 +82,7 @@ def adjust_lifecycles(log):
     return log
 
 
-def preprocess_bpic_2017():
-    my_path = r'C:\Users\bakullari\Documents\hlem_framework\event_logs\BPI-Challenge-2017.xes'
+def preprocess_bpic_2017(my_path):
     cache_path = my_path.replace('.xes', '.pickle')
     if os.path.isfile(cache_path):
         with open(cache_path, 'rb') as f:

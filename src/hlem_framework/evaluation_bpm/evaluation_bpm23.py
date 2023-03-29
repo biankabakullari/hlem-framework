@@ -25,11 +25,11 @@ frame = 'days'  # how to partition the time space onto windows
 seg_percentile = 0.9  # detect only hle over segments that are at least as frequent as the p*100th percentile
 
 
-def download_tables():
+def download_tables(path_to_bpic2017):
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s')
 
     log, res_selection, success_cases, non_success_cases, cases_under_10, cases_10_to_30, cases_over_30, under_10k, \
-    over_10k = process_bpic.preprocess_bpic_2017()
+    over_10k = process_bpic.preprocess_bpic_2017(path_to_bpic2017)
 
     hle_all_dict, hla_paths_dict = hlem_paths.paths_and_cases_with_overlap(input_log=log, frame=frame,
                                                                              traffic_type=traffic_type,
@@ -62,7 +62,9 @@ def download_tables():
 
 
 if __name__ == '__main__':
-    df_paths, outcome_success, outcome_throughput, amount_partition = download_tables()
+    print("Make sure you have set the path your local directory of the BPIC 2017 log")
+    path_to_bpic2017 = r'C:\Users\bakullari\Documents\hlem_framework\event_logs\BPI-Challenge-2017.xes'
+    df_paths, outcome_success, outcome_throughput, amount_partition = download_tables(path_to_bpic2017)
     process_bpic.success_tables(df_paths, outcome_success)
     process_bpic.throughput_tables(df_paths, outcome_throughput)
     process_bpic.amount_tables(df_paths, amount_partition)
