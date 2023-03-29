@@ -1,4 +1,5 @@
 import itertools as it
+import numpy as np
 import frames
 
 
@@ -127,6 +128,39 @@ def trig_rel_dicts(log, method):
         pos += trace_length
 
     return steps_list, triggers_dict, releases_dict
+
+
+def get_most_freq_segments(log, percentile):
+    segment_freq_dic = dict()
+    for trace in log:
+        cf = [event['concept:name'] for event in trace]
+        trace_segs = [(cf[i], cf[i+1]) for i in range(len(trace)-1)]
+        for seg in trace_segs:
+            if seg in segment_freq_dic.keys():
+                segment_freq_dic[seg] += 1
+            else:
+                segment_freq_dic[seg] = 1
+
+    frequencies = list(segment_freq_dic.values())
+    thresh = np.percentile(frequencies, percentile*100)
+    selected_segments = [key for key in segment_freq_dic.keys() if segment_freq_dic[key] >= thresh]
+    return selected_segments
+
+
+def surviving_steps(log, seg_percentile):
+    selected_segments = get_most_freq_segments(log, seg_percentile)
+
+    surviving_pairs = []
+    for i, trace in enumerate(log):
+        for j in range(len(trace)-1):
+            ev_j = trace[j]
+            ev_j_next = trace[j+1]
+            seg = (ev_j['concept:name'], ev_j_next['concept:name'])
+            if seg in selected_segments:
+                surviving_pairs.append((ev_j, ev_j_next))
+            surviving_pairs.append(())
+
+    return surviving_pairs
 
 
 def event_dic_with_resource(log):

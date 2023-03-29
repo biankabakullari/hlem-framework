@@ -1,13 +1,15 @@
 import os.path
-import hlem
+import hlem_with_log
 import pm4py
 import math
 
 
-def main(path, traffic_type='High', hlf_selected=hlem.DEFAULT_HLF, p=90, connection_thresh=0.5, res_info=True, freq=0,
-         only_comp=False, act_selection='all', res_selection='all', seg_method='df', flatten=False):
+def main(path, traffic_type='High', hlf_selected=hlem_with_log.DEFAULT_HLF, p=0.9, connection_thresh=0.5, res_info=True,
+         freq=0, only_comp=False, type_based=True, act_selection='all', res_selection='all', seg_method='df',
+         flatten=False):
     """
 
+    :param type_based:
     :param path: the local path to the log data
     :param traffic_type: can be 'High', 'Low' or ['High', 'Low']
     :param hlf_selected: the list of selected high-level features, can be any non-empty list of elements from
@@ -40,10 +42,10 @@ def main(path, traffic_type='High', hlf_selected=hlem.DEFAULT_HLF, p=90, connect
     #seconds_total = (ts_last-ts_first).total_seconds()
     #no_windows = 6 * (seconds_total / 3600)  # used in the evaluation of the simulated log
     no_windows = math.ceil(math.sqrt(no_events))
-    frame = 'hours'
-    hl_log, df = hlem.transform_log_to_hl_log_width(log, frame, traffic_type, hlf_selected, p, connection_thresh,
-                                                    res_info, freq, only_comp, act_selection, res_selection, seg_method,
-                                                    flatten)
+    frame = 'days'
+    hl_log, df = hlem_with_log.transform_log_to_hl_log_width(log, frame, traffic_type, hlf_selected, p, connection_thresh,
+                                                             res_info, freq, only_comp, type_based, act_selection,
+                                                             res_selection, seg_method, flatten)
 
     return hl_log
 
