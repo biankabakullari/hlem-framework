@@ -1,5 +1,12 @@
 def components(event_dic, steps_list, res_info):
     """
+
+    :param event_dic:
+    :param steps_list:
+    :param res_info:
+    :return:
+    """
+    """
     returns:
      -  the activity set (from the 'act' attribute values in the event_doc),
      -  the resource set (from the 'res' attribute values in the event_doc, empty set if res_info=False),
