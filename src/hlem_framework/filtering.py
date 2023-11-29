@@ -9,6 +9,7 @@ def get_most_freq_segments(log, percentile):
     a list of activity pairs that directly follow each other which cover the given percentile of the directly follows
     pairs in the log
     """
+    #TODO make this a default dict
     segment_freq_dic = dict()
     for trace in log:
         cf = [event['concept:name'] for event in trace]
@@ -43,6 +44,7 @@ def surviving_steps(log, percentile):
             seg = (ev_i['concept:name'], ev_j['concept:name'])
             if seg in selected_segments:
                 surviving_pairs.append((ev_i, ev_j))
+            # TODO: What does this do?
             surviving_pairs.append(())
 
     return surviving_pairs

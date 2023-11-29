@@ -58,20 +58,15 @@ def time_unit_of_timestamp(datetime_ts, unit):
     :param unit: can be 'minutes', 'hours', or 'days'
     :return: number of units elapsed since the Unix time
     """
-    try:
-        unit not in ['seconds', 'minutes', 'hours', 'days', 'weeks']
-    except ValueError:
-        print("The time unit must be minutes/hours/days/weeks")
+    if unit not in ['minutes', 'hours', 'days', 'weeks']:
+        raise ValueError("Cannot turn datetime to time unit. The time unit must be minutes/hours/days/weeks")
     if unit == 'days':
         time_unit = days_since_epoch(datetime_ts)
     elif unit == 'hours':
         time_unit = hours_since_epoch(datetime_ts)
     elif unit == 'minutes':
         time_unit = minutes_since_epoch(datetime_ts)
-    else: # unit = weeks
-        try: unit == 'weeks'
-        except ValueError:
-            'The time unit can only be set to minutes, hours, days, or weeks.'
+    else: # unit == 'weeks'
         time_unit = weeks_since_epoch(datetime_ts)
 
     return time_unit
@@ -107,19 +102,16 @@ def get_window_size_from_unit(unit):
         size = 3600
     elif unit == 'days':
         size = 24 * 3600
-    else:  # unit = weeks
-        try:
-            unit == 'weeks'
-        except ValueError:
-            'The time unit can only be set to minutes, hours, days, or weeks.'
+    elif unit == 'weeks':
         size = 7 * 24 * 3600
+    else:
+        raise ValueError('Cannot get window size from given time unit. The time unit must be minutes/hours/days/weeks')
 
     return size
 
 
 def get_window_size_from_number(event_dict, number, ids_sorted):
     """
-
     :param event_dict: an event dictionary {0: {'act': a, 'case': 5, 'res':'r', ...}, ...}
     :param number: desired number of time windows to split the events into
     :return:
@@ -137,8 +129,7 @@ def get_window_size_from_number(event_dict, number, ids_sorted):
     return window_size
 
 
-def window_borders_dict(event_dict, window_size, ids_sorted):
-
+def window_to_borders_map(event_dict, window_size, ids_sorted):
     """
     :param event_dict: an event dictionary {0: {'act': a, 'case': 5, 'res':'r', ...}, ...}
     :param window_size: desired window size as number of seconds (integer)
@@ -146,102 +137,69 @@ def window_borders_dict(event_dict, window_size, ids_sorted):
     :return: dictionary where each key is a number identifying a window and each value=(left_border, right_border) is
     a tuple containing the borders of the window in seconds
     """
+
     id_min = ids_sorted[0]
     id_max = ids_sorted[-1]
 
     start_int = event_dict[id_min]['ts-seconds']
     end_int = event_dict[id_max]['ts-seconds']
 
-    w_borders_dict = {}
+    window_to_borders = {}
     w = 0
 
     current_left = start_int
     current_right = current_left + window_size
     while current_right < end_int:
-        w_borders_dict[w] = (current_left, current_right)
+        window_to_borders[w] = (current_left, current_right)
         current_left = current_right
         current_right = current_left + window_size
         w += 1
 
-    return w_borders_dict
+    return window_to_borders
 
 
-def window_events_dict(event_dict, window_size, ids_sorted):
+def framing(event_dict, frame, ids_sorted):
 
     """
     :param event_dict: an event dictionary {0: {'act': a, 'case': 5, 'res':'r', ...}, ...}
-    :param window_size: desired window size
+    :param frame: can be a number (determining number of windows) or a time unit (minutes, hours, days, or weeks)
+    :param ids_sorted: the event ids sorted by event timestamp
     :return:
     -   w_events_list: dict with window identifiers as keys and list of event IDs that occur within that window
     (in [left_border, right_border)) as values
     -   id_window_mapping: dict where id_window_mapping[e_id]=w whenever an event e with id e_id occurs within window w
     (in [left_border, right_border))
+    -   window_to_borders: dictionary where each key is a number identifying a window and each
+    value=(left_border, right_border) is a tuple containing the borders of the window in seconds
     """
-    w_borders_dict = window_borders_dict(event_dict, window_size, ids_sorted)
+    if type(frame) == int or type(frame) == float:
+        number = frame
+        window_size = get_window_size_from_number(event_dict, number, ids_sorted)
+    else:
+        unit = frame
+        assert unit in ['minutes', 'hours', 'days', 'weeks']
+        window_size = get_window_size_from_unit(unit)
+
+    window_to_borders = window_to_borders_map(event_dict, window_size, ids_sorted)
 
     # initially, each window is empty
     # some windows might remain empty, but we still want them to exist
-    w_events_list = {w: [] for w in list(w_borders_dict.keys())}
+    window_to_ev_list = {w: [] for w in list(window_to_borders.keys())}
 
     #assign corresponding frame to each event
-    id_window_mapping = {ev: 0 for ev in list(event_dict.keys())}
+    ev_to_window = {ev: 0 for ev in list(event_dict.keys())}
 
     current_window = 0
-    max_window = max([windowId for windowId in w_events_list.keys()])
-    current_borders = w_borders_dict[current_window]
+    max_window = max([windowId for windowId in window_to_ev_list.keys()])
+    current_borders = window_to_borders[current_window]
 
     for ev_id in ids_sorted:
         current_ts = event_dict[ev_id]['ts-seconds']
         # as long as current timestamp is higher than right border of current window, go to next window
         while current_ts >= current_borders[1] and current_window < max_window:
             current_window += 1
-            current_borders = w_borders_dict[current_window]
-        w_events_list[current_window].append(ev_id)
-        id_window_mapping[ev_id] = current_window
+            current_borders = window_to_borders[current_window]
+        window_to_ev_list[current_window].append(ev_id)
+        ev_to_window[ev_id] = current_window
 
-    return w_events_list, id_window_mapping
-
-
-def frame_events_dict(event_dict, frame, ids_sorted):
-
-    """
-    :param event_dict: an event dictionary {0: {'act': a, 'case': 5, 'res':'r', ...}, ...}
-    :param frame: can be a number (determining number of windows) or a time unit (minutes, hours, days, or weeks)
-    :return:
-    -   w_events_list: dict with window identifiers as keys and list of event IDs that occur within that window
-    (in [left_border, right_border)) as values
-    -   id_window_mapping: dict where id_window_mapping[e_id]=w whenever an event e with id e_id occurs within window w
-    (in [left_border, right_border))
-    """
-
-    if type(frame) == int or type(frame) == float:
-        number = frame
-        window_size = get_window_size_from_number(event_dict, number, ids_sorted)
-
-    else:
-        unit = frame
-        assert unit in ['minutes', 'hours', 'days', 'weeks']
-        window_size = get_window_size_from_unit(unit)
-    w_events_list, id_window_mapping = window_events_dict(event_dict, window_size, ids_sorted)
-
-    return w_events_list, id_window_mapping
-
-
-def frame_borders_dict(event_dict, frame, ids_sorted):
-
-    """
-    :param event_dict: event_dict: an event dictionary {0: {'act': a, 'case': 5, 'res':'r', ...}, ...}
-    :param frame: frame: can be a number (determining number of windows) or a time unit (minutes, hours, days, or weeks)
-    :param ids_sorted: the event ids sorted by event timestamp
-    :return: dictionary where each key is a number identifying a window and each value=(left_border, right_border) is
-    a tuple containing the borders of the window in seconds
-    """
-
-    if type(frame) == int or type(frame) == float:
-        number = frame
-        size = get_window_size_from_number(event_dict, number, ids_sorted)
-    else:
-        unit = frame
-        size = get_window_size_from_unit(unit)
-    windows_borders = window_borders_dict(event_dict, size, ids_sorted)
-    return windows_borders
+    return window_to_ev_list, ev_to_window, window_to_borders

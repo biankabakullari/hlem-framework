@@ -15,20 +15,17 @@ def event_dic_with_resource(log):
         n = len(trace)
         #case = trace.attributes['concept:name']
         case = trace_index
+
         for j in range(n):
             event = trace[j]
             act = event['concept:name']
+
             ts = event['time:timestamp']
             ts_seconds = frames.seconds_since_epoch(ts)
             # TODO: check if this still works with negative seconds
             assert ts_seconds > 0, 'Event happened before January 1st, 1970!'
 
-            try:
-                res = event['org:resource']
-            except KeyError:
-                'Resource information not found'
-                res = 'UNK'
-
+            res = event['org:resource']
             if res == '':
                 res = 'UNK'
 

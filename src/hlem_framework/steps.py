@@ -2,13 +2,13 @@ import itertools as it
 import frames
 
 
-def df_po_trace(trace):
+def df_partial_order_trace(trace):
     """
-
     :param trace: a sequence of events
     :return: the indices of the event pairs that directly follow each other
     here: po=partial order, so events with identical timestamps are taken into consideration
     """
+
     n = len(trace)
     df_indices = []
 
@@ -34,14 +34,14 @@ def df_po_trace(trace):
     return df_indices
 
 
-def df_to_trace(trace):
+def df_total_order_trace(trace):
     """
-
     :param trace: a sequence of events
     :return: the indices of the event pairs that directly follow each other
     here: to=total order, so event pairs correspond to the order in which they appear in the sequence, without taking
     care of identical timestamps
     """
+
     n = len(trace)
     df_indices = [(i, i + 1) for i in range(n - 1)]
     assert len(df_indices) == n-1, 'Error in detecting the directly-follows event pairs'
@@ -51,9 +51,11 @@ def df_to_trace(trace):
 
 def directly_follows_pairs(trace):
     """
-    decides for a given trace, whether there are events with identical timestamps, and selects the correct method of
-    computing the directly-follows pairs
+    :param trace: a sequence of events
+    :return: a list of pairs (i,j) where events in positions i and j directly follow each other in the trace
+    (identical timestamps are considered)
     """
+
     n = len(trace)
     if n == 1:
         return [(trace[0])]
@@ -61,10 +63,10 @@ def directly_follows_pairs(trace):
     else:
         ts_set = set([frames.seconds_since_epoch(event['time:timestamp']) for event in trace])
         if len(ts_set) < n:  # trace contains less unique ts than events, so trace has events with identical ts
-            df_indices = df_po_trace(trace)
+            df_indices = df_partial_order_trace(trace)
 
         else:  # each ts in the trace is unique, so trace is totally ordered
-            df_indices = df_to_trace(trace)
+            df_indices = df_total_order_trace(trace)
 
         return df_indices
 
@@ -98,8 +100,8 @@ def trigger_release_dicts(log, method):
     :return:
     Given an event log and a method for defining steps, returns:
     - a list of pairs of numbers, each number uniquely identifies an event from the log, each pair constitutes a step
-    - a dictionary where each key,value pair i: [j1,...,jn] means that set (i,j1),...,(i,jn) are steps
-    - a dictionary where each key,value pair j: [i1,...,in] means that set (i1,j),...,(in,j) are steps
+    - trigger dict: a dictionary where each key,value pair i: [j1,...,jn] means that set (i,j1),...,(i,jn) are steps
+    - release dict: a dictionary where each key,value pair j: [i1,...,in] means that set (i1,j),...,(in,j) are steps
     """
     steps_by_trace = log_steps_by_trace(log, method)
 
