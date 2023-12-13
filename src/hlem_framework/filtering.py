@@ -1,4 +1,5 @@
 import numpy as np
+from collections import defaultdict
 
 
 def get_most_freq_segments(log, percentile):
@@ -9,16 +10,13 @@ def get_most_freq_segments(log, percentile):
     a list of activity pairs that directly follow each other which cover the given percentile of the directly follows
     pairs in the log
     """
-    #TODO make this a default dict
-    segment_freq_dic = dict()
+
+    segment_freq_dic = defaultdict(lambda: 0)
     for trace in log:
         cf = [event['concept:name'] for event in trace]
         trace_segs = [(cf[i], cf[i+1]) for i in range(len(trace)-1)]
         for seg in trace_segs:
-            if seg in segment_freq_dic.keys():
                 segment_freq_dic[seg] += 1
-            else:
-                segment_freq_dic[seg] = 1
 
     frequencies = list(segment_freq_dic.values())
     thresh = np.percentile(frequencies, percentile*100)

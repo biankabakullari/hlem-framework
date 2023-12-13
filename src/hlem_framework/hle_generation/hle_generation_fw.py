@@ -3,9 +3,9 @@ from collections import defaultdict
 import logging
 from typing import Literal, Union, NamedTuple
 from component import Component
+from eval_fw import Aspect
 
 
-Aspect = Literal['exec', 'toexec', 'queue', 'enter', 'exit', 'cross', 'wait', 'do', 'todo', 'busy']
 TrafficType = Literal['low', 'normal', 'high']
 TrafficOfInterest = Literal['low', 'high', 'low and high']
 
@@ -13,8 +13,8 @@ TrafficOfInterest = Literal['low', 'high', 'low and high']
 class HLE(NamedTuple):
     aspect: Aspect
     entity: str
-    component: Component
     traffic_type: TrafficType
+    component: Component
     value: Union[float, int]
     window: int
 
@@ -23,6 +23,11 @@ class HLA(NamedTuple):
     aspect: Aspect
     entity: str
     traffic_type: TrafficType
+
+
+def get_high_level_activity(hle: HLE):
+    hla = HLA(hle.aspect,  hle.entity, hle.traffic_type)
+    return hla
 
 
 def get_low_and_high_thresholds(multiset, p):
@@ -156,9 +161,28 @@ def get_aspect_thresholds(eval_complete, p):
     return aspect_to_thresh
 
 
-# TODO make traffic_of_interest possible to be 'low and high'
 def hle_window_by_hlf(traffic_of_interest: TrafficOfInterest, window, eval_complete, comp_type_dict, hlf_to_thresh,
                       frequencies_last, id_counter):
+    """
+    :param traffic_of_interest: the type of traffic that should generate high-level-events, can be 'low', 'high', or
+    'low and high'
+    :param window: some window id
+    :param eval_complete: a dict with first level key value pairs: window id, dictionary for that window, and second
+    level key value pairs: {(enqueue,a):v1, (enqueue,b):v2,...}, {(enter,(a,b)):w1, (enter,(c,d)):w2,...},
+    {(busy,r1):y1, (busy,r2):y2...} with the corresponding counts for the window + high-level feature combination
+    :param comp_type_dict: a dictionary {'a': 'activity', ..., 'r': 'resource, ..., 's': 'segment'} for any activity a,
+    resource r, and segment s
+    :param hlf_to_thresh: A dict where each key is a high-level feature (e.g. exec-a, busy-Jane, cross-ab) and the value
+    is a pair (low, thresh) with the corresponding low and high thresholds
+    :param frequencies_last: A dict where each key is a high-level activity HLA (with aspect, entity and traffic type)
+    and the value is its occurrence count across all the previous windows
+    :param id_counter: a high-level event id that gets incremented for each new hle within and across windows
+    :return:
+    -   id_to_hle: a dict where each key is a unique id and the value is the high-level event of type HLE
+    -   frequencies_last: A dict where each key is a high-level activity HLA (with aspect, entity and traffic type) and
+    the value is its occurrence count after the update in the current window
+    -   id_counter: the id of the last detected high-level event
+    """
 
     id_to_hle = {}
     eval_at_window = eval_complete[window]
@@ -172,7 +196,7 @@ def hle_window_by_hlf(traffic_of_interest: TrafficOfInterest, window, eval_compl
         traffic = value_class(hlf_value, low, high)
 
         if traffic in traffic_of_interest:
-            hle = HLE(aspect, entity, component, traffic, hlf_value, window)
+            hle = HLE(aspect, entity, traffic, component, hlf_value, window)
             # the id_counter is the key of the generated hle within the window, window[id_counter] = hle
             # it gets updated after each window so that even across windows, the ids are unique
             id_to_hle[id_counter] = hle
@@ -185,6 +209,26 @@ def hle_window_by_hlf(traffic_of_interest: TrafficOfInterest, window, eval_compl
 
 def hle_window_by_aspect(traffic_of_interest: TrafficOfInterest, window, eval_complete, comp_type_dict,
                          aspect_to_thresholds, frequencies_last, id_counter):
+    """
+    :param traffic_of_interest: the type of traffic that should generate high-level-events, can be 'low', 'high', or
+    'low and high'
+    :param window: some window id
+    :param eval_complete: a dict with first level key value pairs: window id, dictionary for that window, and second
+    level key value pairs: {(enqueue,a):v1, (enqueue,b):v2,...}, {(enter,(a,b)):w1, (enter,(c,d)):w2,...},
+    {(busy,r1):y1, (busy,r2):y2...} with the corresponding counts for the window + high-level feature combination
+    :param comp_type_dict: a dictionary {'a': 'activity', ..., 'r': 'resource, ..., 's': 'segment'} for any activity a,
+    resource r, and segment s
+    :param aspect_to_thresholds: A dict where each key is a high-level aspect (e.g. exec, busy, cross) and the value
+    is a pair (low, thresh) with the corresponding low and high thresholds
+    :param frequencies_last: A dict where each key is a high-level activity HLA (with aspect, entity and traffic type)
+    and the value is its occurrence count across all the previous windows
+    :param id_counter: the id of the last detected high-level event
+    :return:
+    -   id_to_hle: a dict where each key is a unique id and the value is the high-level event of type HLE
+    -   frequencies_last: A dict where each key is a high-level activity HLA (with aspect, entity and traffic type) and
+    the value is its occurrence count after the update in the current window
+    -   id_counter: the id of the last detected high-level event
+    """
 
     id_to_hle = {}
     eval_at_window = eval_complete[window]
@@ -198,7 +242,7 @@ def hle_window_by_aspect(traffic_of_interest: TrafficOfInterest, window, eval_co
         traffic = value_class(hlf_value, low, high)
 
         if traffic in traffic_of_interest:
-            hle = HLE(aspect, entity, component, traffic, hlf_value, window)
+            hle = HLE(aspect, entity, traffic, component, hlf_value, window)
             # the id_counter is the key of the generated hle within the window, window[id_counter] = hle
             # it gets updated after each window so that even across windows, the ids are unique
             id_to_hle[id_counter] = hle
@@ -208,8 +252,25 @@ def hle_window_by_aspect(traffic_of_interest: TrafficOfInterest, window, eval_co
     return id_to_hle, frequencies_last, id_counter
 
 
-def hle_all(traffic_of_interest, eval_complete, comp_type_dict, p, aspect_based):
-
+def generate_hle(traffic_of_interest, eval_complete, comp_type_dict, p, aspect_based):
+    """
+    :param traffic_of_interest: the type of traffic that should generate high-level-events, can be 'low', 'high', or
+    'low and high'
+    :param eval_complete: a dict with first level key value pairs: window id, dictionary for that window, and second
+    level key value pairs: {(enqueue,a):v1, (enqueue,b):v2,...}, {(enter,(a,b)):w1, (enter,(c,d)):w2,...},
+    {(busy,r1):y1, (busy,r2):y2...} with the corresponding counts for the window + high-level feature combination
+    :param comp_type_dict: a dictionary {'a': 'activity', ..., 'r': 'resource, ..., 's': 'segment'} for any activity a,
+    resource r, and segment s
+    :param p: must be number 50 < p < 100
+    :param aspect_based: If True, the thresholds are determined based on aspect (e.g., exec, enter, busy). If False, the
+    thresholds are determined based on high-level feature (e.g. 'exec-a', 'busy-Jane').
+    :return:
+    -   id_to_hle_all: a dict where each key is a unique id and the value is the high-level event of type HLE
+    -   window_to_id_to_hle: a dict where first key is the window id, second key is the high-level event id and the value
+    is the HLE (aspect, entity, component, traffic_type, value, window)
+    -   last_freq: A dict where each key is a high-level activity HLA (with aspect, entity and traffic type) and
+    the value is its occurrence count across all windows
+    """
     id_to_hle_all = {}
     window_to_id_to_hle = {}
 
@@ -248,10 +309,17 @@ def hle_all(traffic_of_interest, eval_complete, comp_type_dict, p, aspect_based)
                 id_to_hle_all[hle_id] = hle
     no_hle = len(id_to_hle_all.keys())
     logging.info('We detected ' + str(no_hle) + ' high-level events.')
+
     return id_to_hle_all, window_to_id_to_hle, last_freq
 
 
 def filter_hla(freq_dict, freq_thresh):
+    """
+    :param freq_dict: A dict where each key is a high-level activity HLA (with aspect, entity and traffic type) and
+    the value is its occurrence count across all windows
+    :param freq_thresh:
+    :return:
+    """
     hla_filtered = []
     freq_values = [freq_dict[hla] for hla in freq_dict.keys()]
 

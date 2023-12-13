@@ -2,7 +2,6 @@ import frames
 
 
 def event_dic_with_resource(log):
-    #TODO: change to named tuples
     """
     :param log: the event log
     :return: a dictionary where each key is a number uniquely identifying some event from the log, the value is a
