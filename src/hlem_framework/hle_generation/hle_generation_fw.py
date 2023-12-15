@@ -3,7 +3,7 @@ from collections import defaultdict
 import logging
 from typing import Literal, Union, NamedTuple
 from component import Component
-from eval_fw import Aspect
+from .eval_fw import Aspect
 
 
 TrafficType = Literal['low', 'normal', 'high']
@@ -44,8 +44,9 @@ def get_low_and_high_thresholds(multiset, p):
         raise ValueError('The percentile p for determining the threshold must be 50 <= p < 100')
 
     multiset_no_zeros = list(filter(lambda m: m != 0, multiset))
-    if len(multiset_no_zeros) == 0:
-        # if all values are 0, the high threshold is so high that no zero value qualifies as higher
+    if len(multiset_no_zeros) == 0 or len(set(multiset_no_zeros)) == 1:
+        # if all values are 0 or if there is only one kind of non-zero value,
+        # the high threshold is so high that no zero value qualifies as higher
         high_thresh = 10 ** 10
         # if all values are 0, the low threshold is zero so that no zero value qualifies as lower
         low_thresh = 0
@@ -63,6 +64,11 @@ def value_class(value, low, high) -> TrafficType:
     :param high: a number, the threshold for value to be considered as high
     :return: 'low' if value lower than low, 'high' if value higher than high, 'normal' otherwise
     """
+    # it may happen that the low and high thresholds are the same, e.g., for [1,2,2,2,2,2,2,2,3] both are 2
+    # that means that that value is almost a constant measurement
+    # values that are lower or higher are "allowed" to generate high-level events
+    # any other value will either be higher, or lower
+    assert low <= high, "The low threshold is > than the high threshold!"
     if value < low:
         return 'low'
     elif value > high:
@@ -109,7 +115,7 @@ def hlf_to_thresholds(eval_complete, p):
 
     for hlf in hlf_to_value.keys():
         value_multiset = hlf_to_value[hlf]
-        low, high = get_low_and_high_thresholds(value_multiset, p)
+        low, high = get_low_and_high_thresholds(value_multiset, p*100)
         hlf_to_thresh[hlf] = (low, high)
 
     return hlf_to_thresh
@@ -155,14 +161,14 @@ def get_aspect_thresholds(eval_complete, p):
 
     for aspect in aspect_to_values.keys():
         value_multiset = aspect_to_values[aspect]
-        low, high = get_low_and_high_thresholds(value_multiset, p)
+        low, high = get_low_and_high_thresholds(value_multiset, p*100)
         aspect_to_thresh[aspect] = (low, high)
 
     return aspect_to_thresh
 
 
-def hle_window_by_hlf(traffic_of_interest: TrafficOfInterest, window, eval_complete, comp_type_dict, hlf_to_thresh,
-                      frequencies_last, id_counter):
+def hle_window_by_hlf(traffic_of_interest: TrafficOfInterest, window, eval_complete, aspects, comp_type_dict,
+                      hlf_to_thresh, frequencies_last, id_counter):
     """
     :param traffic_of_interest: the type of traffic that should generate high-level-events, can be 'low', 'high', or
     'low and high'
@@ -170,6 +176,7 @@ def hle_window_by_hlf(traffic_of_interest: TrafficOfInterest, window, eval_compl
     :param eval_complete: a dict with first level key value pairs: window id, dictionary for that window, and second
     level key value pairs: {(enqueue,a):v1, (enqueue,b):v2,...}, {(enter,(a,b)):w1, (enter,(c,d)):w2,...},
     {(busy,r1):y1, (busy,r2):y2...} with the corresponding counts for the window + high-level feature combination
+    :param aspects: the set of selected aspects for analysis (e.g., 'enter', 'exec', 'busy', ...)
     :param comp_type_dict: a dictionary {'a': 'activity', ..., 'r': 'resource, ..., 's': 'segment'} for any activity a,
     resource r, and segment s
     :param hlf_to_thresh: A dict where each key is a high-level feature (e.g. exec-a, busy-Jane, cross-ab) and the value
@@ -190,24 +197,28 @@ def hle_window_by_hlf(traffic_of_interest: TrafficOfInterest, window, eval_compl
     for hlf in eval_at_window.keys():
         hlf_value = eval_at_window[hlf]
         aspect = hlf[0]  # e.g. busy
-        entity = hlf[1]  # e.g. Jane
-        component = comp_type_dict[entity]
-        low, high = hlf_to_thresh[hlf]
-        traffic = value_class(hlf_value, low, high)
 
-        if traffic in traffic_of_interest:
-            hle = HLE(aspect, entity, traffic, component, hlf_value, window)
-            # the id_counter is the key of the generated hle within the window, window[id_counter] = hle
-            # it gets updated after each window so that even across windows, the ids are unique
-            id_to_hle[id_counter] = hle
-            hla = HLA(aspect, entity, traffic)
-            frequencies_last[hla] += 1
-            id_counter += 1
+        # this check serves only for removing 'cross' hle when 'cross' was only computed for the purpose of computing
+        # the average 'delay'/'wait'
+        if aspect in aspects:
+            entity = hlf[1]  # e.g. Jane
+            component = comp_type_dict[entity]
+            low, high = hlf_to_thresh[hlf]
+            traffic = value_class(hlf_value, low, high)
+
+            if traffic in traffic_of_interest:
+                hle = HLE(aspect, entity, traffic, component, hlf_value, window)
+                # the id_counter is the key of the generated hle within the window, window[id_counter] = hle
+                # it gets updated after each window so that even across windows, the ids are unique
+                id_to_hle[id_counter] = hle
+                hla = HLA(aspect, entity, traffic)
+                frequencies_last[hla] += 1
+                id_counter += 1
 
     return id_to_hle, frequencies_last, id_counter
 
 
-def hle_window_by_aspect(traffic_of_interest: TrafficOfInterest, window, eval_complete, comp_type_dict,
+def hle_window_by_aspect(traffic_of_interest: TrafficOfInterest, window, eval_complete, aspects, comp_type_dict,
                          aspect_to_thresholds, frequencies_last, id_counter):
     """
     :param traffic_of_interest: the type of traffic that should generate high-level-events, can be 'low', 'high', or
@@ -216,6 +227,7 @@ def hle_window_by_aspect(traffic_of_interest: TrafficOfInterest, window, eval_co
     :param eval_complete: a dict with first level key value pairs: window id, dictionary for that window, and second
     level key value pairs: {(enqueue,a):v1, (enqueue,b):v2,...}, {(enter,(a,b)):w1, (enter,(c,d)):w2,...},
     {(busy,r1):y1, (busy,r2):y2...} with the corresponding counts for the window + high-level feature combination
+    :param aspects: the set of selected aspects for analysis (e.g., 'enter', 'exec', 'busy', ...)
     :param comp_type_dict: a dictionary {'a': 'activity', ..., 'r': 'resource, ..., 's': 'segment'} for any activity a,
     resource r, and segment s
     :param aspect_to_thresholds: A dict where each key is a high-level aspect (e.g. exec, busy, cross) and the value
@@ -236,23 +248,27 @@ def hle_window_by_aspect(traffic_of_interest: TrafficOfInterest, window, eval_co
     for hlf in eval_at_window.keys():
         hlf_value = eval_at_window[hlf]
         aspect = hlf[0]  # e.g. busy
-        entity = hlf[1]  # e.g. Jane
-        component = comp_type_dict[entity]
-        low, high = aspect_to_thresholds[aspect]
-        traffic = value_class(hlf_value, low, high)
 
-        if traffic in traffic_of_interest:
-            hle = HLE(aspect, entity, traffic, component, hlf_value, window)
-            # the id_counter is the key of the generated hle within the window, window[id_counter] = hle
-            # it gets updated after each window so that even across windows, the ids are unique
-            id_to_hle[id_counter] = hle
-            hla = HLA(aspect, entity, traffic)
-            frequencies_last[hla] += 1
-            id_counter += 1
+        # this check serves only for removing 'cross' hle when 'cross' was only computed for the purpose of computing
+        # the average 'delay'/'wait'
+        if aspect in aspects:
+            entity = hlf[1]  # e.g. Jane
+            component = comp_type_dict[entity]
+            low, high = aspect_to_thresholds[aspect]
+            traffic = value_class(hlf_value, low, high)
+
+            if traffic in traffic_of_interest:
+                hle = HLE(aspect, entity, traffic, component, hlf_value, window)
+                # the id_counter is the key of the generated hle within the window, window[id_counter] = hle
+                # it gets updated after each window so that even across windows, the ids are unique
+                id_to_hle[id_counter] = hle
+                hla = HLA(aspect, entity, traffic)
+                frequencies_last[hla] += 1
+                id_counter += 1
     return id_to_hle, frequencies_last, id_counter
 
 
-def generate_hle(traffic_of_interest, eval_complete, comp_type_dict, p, aspect_based):
+def generate_hle(traffic_of_interest, eval_complete, aspects, comp_type_dict, p, aspect_based):
     """
     :param traffic_of_interest: the type of traffic that should generate high-level-events, can be 'low', 'high', or
     'low and high'
@@ -261,6 +277,7 @@ def generate_hle(traffic_of_interest, eval_complete, comp_type_dict, p, aspect_b
     {(busy,r1):y1, (busy,r2):y2...} with the corresponding counts for the window + high-level feature combination
     :param comp_type_dict: a dictionary {'a': 'activity', ..., 'r': 'resource, ..., 's': 'segment'} for any activity a,
     resource r, and segment s
+    :param aspects: the set of selected aspects for analysis (e.g., 'enter', 'exec', 'busy', ...)
     :param p: must be number 50 < p < 100
     :param aspect_based: If True, the thresholds are determined based on aspect (e.g., exec, enter, busy). If False, the
     thresholds are determined based on high-level feature (e.g. 'exec-a', 'busy-Jane').
@@ -283,9 +300,9 @@ def generate_hle(traffic_of_interest, eval_complete, comp_type_dict, p, aspect_b
         aspect_to_thresh = get_aspect_thresholds(eval_complete, p)
         for window in eval_complete.keys():
             id_to_hle_window, last_freq_updated, id_counter = hle_window_by_aspect(traffic_of_interest, window,
-                                                                                   eval_complete, comp_type_dict,
-                                                                                   aspect_to_thresh, last_freq,
-                                                                                   id_counter)
+                                                                                   eval_complete, aspects,
+                                                                                   comp_type_dict, aspect_to_thresh,
+                                                                                   last_freq, id_counter)
             last_freq = last_freq_updated
             window_to_id_to_hle[window] = id_to_hle_window
             for hle_id in id_to_hle_window.keys():
@@ -298,7 +315,7 @@ def generate_hle(traffic_of_interest, eval_complete, comp_type_dict, p, aspect_b
         hlf_to_thresh = hlf_to_thresholds(eval_complete, p)
         for window in eval_complete.keys():
             id_to_hle_window, last_freq_updated, id_counter = hle_window_by_hlf(traffic_of_interest, window,
-                                                                                eval_complete, comp_type_dict,
+                                                                                eval_complete, aspects, comp_type_dict,
                                                                                 hlf_to_thresh, last_freq,
                                                                                 id_counter)
 
@@ -320,26 +337,26 @@ def filter_hla(freq_dict, freq_thresh):
     :param freq_thresh:
     :return:
     """
-    hla_filtered = []
+
     freq_values = [freq_dict[hla] for hla in freq_dict.keys()]
 
     # a freq_thresh=0.8 requests selecting only the 20% most frequent high-level activities
     if 0 < freq_thresh < 1:
         percentile = freq_thresh * 100
         _, high = get_low_and_high_thresholds(freq_values, percentile)
-
-        for hla in freq_dict.keys():
-            if freq_dict[hla] >= high:
-                hla_filtered.append(hla)
+        hla_filtered = [hla for hla in freq_dict.keys() if freq_dict[hla] >= high]
         return hla_filtered
 
-    # a freq_thresh=7 requests selecting the seven most frequent high-level activities
-    elif freq_thresh >= 1 and isinstance(freq_thresh, int):
-        most_frequent = sorted(freq_dict.keys(), key=lambda x: freq_dict[x])[:freq_thresh]
-        return most_frequent
+    # a freq_thresh=7 requests selecting the high-level activities whose frequency is in the top 7 frequencies
+    elif freq_thresh > 1 and isinstance(freq_thresh, int):
+        freq_values_set = list(set(freq_values))
+        freq_values_high_enough = sorted(freq_values_set, reverse=True)[:freq_thresh]
+        lowest_acceptable = freq_values_high_enough[-1]
+        hla_filtered = [hla for hla in freq_dict.keys() if freq_dict[hla] >= lowest_acceptable]
+        return hla_filtered
 
-    # freq_thresh = 0 means no filtering required
-    elif freq_thresh == 0:
+    # freq_thresh = 1 means no filtering required
+    elif freq_thresh == 1:
         hla_unfiltered = freq_dict.keys()
         return hla_unfiltered
 

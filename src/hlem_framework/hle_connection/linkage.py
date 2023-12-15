@@ -1,9 +1,8 @@
 import itertools as it
 from collections import defaultdict
-import component
 
 
-def entity_occurrence_counts(event_dict, steps_list, trigger_dict, release_dict, res_info):
+def entity_occurrence_counts(event_dict, steps_list, all_A, all_S, all_R, trigger_dict, release_dict, res_info):
     """
     :param event_dict: dictionary where keys are numbers identifying events, values are the event attribute-value pairs
     :param steps_list: a list of (i,j) pairs, where i and j event identifiers of event pairs that constitute a step
@@ -21,18 +20,17 @@ def entity_occurrence_counts(event_dict, steps_list, trigger_dict, release_dict,
     -   rs_counts: a dictionary where rs_counts[(r, s)] for any resource r and segment s is the total number of steps
     traversing s (either entering or exiting s) when r executes an event underlying s
     """
-    activity_set, resource_set, segment_set = component.get_entities(event_dict, steps_list, res_info)
 
-    a_counts = dict.fromkeys(activity_set, 0)
-    s_counts = dict.fromkeys(segment_set, 0)
+    a_counts = dict.fromkeys(all_A, 0)
+    s_counts = dict.fromkeys(all_S, 0)
 
-    aa_counts = dict.fromkeys(list(it.product(activity_set, activity_set)), 0)
-    ss_counts = dict.fromkeys(list(it.product(segment_set, segment_set)), 0)
+    aa_counts = dict.fromkeys(list(it.product(all_A, all_A)), 0)
+    ss_counts = dict.fromkeys(list(it.product(all_S, all_S)), 0)
 
-    r_counts = dict.fromkeys(resource_set, 0)
-    rr_counts = dict.fromkeys(list(it.product(resource_set, resource_set)), 0)
-    ar_counts = dict.fromkeys(list(it.product(activity_set, resource_set)), 0)
-    rs_counts = dict.fromkeys(list(it.product(resource_set, segment_set)), 0)
+    r_counts = dict.fromkeys(all_R, 0)
+    rr_counts = dict.fromkeys(list(it.product(all_R, all_R)), 0)
+    ar_counts = dict.fromkeys(list(it.product(all_A, all_R)), 0)
+    rs_counts = dict.fromkeys(list(it.product(all_R, all_S)), 0)
 
     for ev in event_dict.keys():
         a = event_dict[ev]['act']
@@ -52,14 +50,14 @@ def entity_occurrence_counts(event_dict, steps_list, trigger_dict, release_dict,
                     s2 = (a, a_next)
                     ss_counts[(s1, s2)] += 1
 
-        if res_info and len(resource_set):
+        if res_info and len(all_R):
             r = event_dict[ev]['res']
             r_counts[r] += 1
             ar_counts[(a, r)] += 1
 
     act_pairs = [(event_dict[ei]['act'], event_dict[ej]['act']) for ei, ej in steps_list]
 
-    if res_info and len(resource_set):
+    if res_info and len(all_R):
         res_pairs = [(event_dict[ei]['res'], event_dict[ej]['res']) for ei, ej in steps_list]
     else:
         res_pairs = []
@@ -67,7 +65,7 @@ def entity_occurrence_counts(event_dict, steps_list, trigger_dict, release_dict,
     for index, act_pair in enumerate(act_pairs):
         aa_counts[act_pair] += 1
         s_counts[act_pair] += 1
-        if res_info and len(resource_set):
+        if res_info and len(all_R):
             res_pair = res_pairs[index]
             rr_counts[res_pair] += 1
             # TODO: need to adjust this for start and end events (should be 1 instead of 1/2)
@@ -77,7 +75,7 @@ def entity_occurrence_counts(event_dict, steps_list, trigger_dict, release_dict,
     return a_counts, r_counts, s_counts, aa_counts, rr_counts, ss_counts, ar_counts, rs_counts
 
 
-def entity_pair_link(event_dict, steps_list, trigger_dict, release_dict, res_info):
+def entity_pair_link(event_dict, steps_list, all_A, all_S, all_R, trigger_dict, release_dict, res_info):
     """
     :param event_dict: dictionary where keys are numbers identifying events, values are the event attribute-value pairs
     :param steps_list: a list of (i,j) pairs, where i and j event identifiers of event pairs that constitute a step
@@ -91,7 +89,7 @@ def entity_pair_link(event_dict, steps_list, trigger_dict, release_dict, res_inf
     For details: refer to the pg. 5 of the "High-level Event Mining: A Framework" paper.
     """
     a_counts, r_counts, s_counts, aa_counts, rr_counts, ss_counts, ar_counts, rs_counts = \
-        entity_occurrence_counts(event_dict, steps_list, trigger_dict, release_dict, res_info)
+        entity_occurrence_counts(event_dict, steps_list, all_A, all_S, all_R, trigger_dict, release_dict, res_info)
     link_dict = {'aa': dict.fromkeys(list(aa_counts.keys()), 0.0),
                  'rr': dict.fromkeys(list(rr_counts.keys()), 0.0),
                  'ss': dict.fromkeys(list(ss_counts.keys()), 0.0),

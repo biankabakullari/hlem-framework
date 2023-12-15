@@ -29,9 +29,9 @@ class HlemArgs:
     spread_link: if True, the normalized link values will be reassigned so that they spread uniformly between 0 and 1,
     default is False
     hla_freq_thresh: the threshold to keep only most frequent high-level activities, either a float (e.g., 0.8 to keep
-    20% most frequent hla) or a number (e.g., 10 for most 10 frequent hla). After having computed all hle and cascades
-    BEFORE filtering, the hle will be projected onto the most frequent hla only, the rest will disappear from output,
-    default is 10
+    20% most frequent hla, 1 to keep 100%) or a number > 1 (e.g., 10 for those hla whose frequency is in the top 10 ).
+    After having computed all hle and cascades BEFORE filtering, the hle will be projected onto the most frequent hla
+    only, the rest will disappear from output, default is 10
     only_entity: if True, the names of the high-level activities will only refer to the underlying entity (activity,
     resource, or segment), e.g., will not be 'exes-a', but only 'a'. This should only be used when the
     traffic_of_interest is 'low' or 'high' and not both.
@@ -48,9 +48,9 @@ class HlemArgs:
     p: float = 0.8
     link_thresh: float = 0.5
     spread_link: bool = False
-    hla_freq_thresh: Union[float, int] = 10
+    hla_freq_thresh: Union[float, int] = 3
     only_entity: bool = False
-    aspect_based: bool = True
+    aspect_based: bool = False
     seg_method: Literal['df', 'mf'] = 'df'
     flatten: bool = False
 
@@ -93,13 +93,15 @@ def fix_res_config(res_selection, aspects):
     return res_info, res_selection
 
 
-def transform_log_to_hl_log(log, act_selection, seg_selection, res_selection, args: HlemArgs, export = True):
+def transform_log_to_hl_log(log, act_selection, seg_selection, res_selection, args: HlemArgs, export=True):
     """
     :param log: the input event log in xes format
     :param act_selection: the set of activities chosen for analysis
     :param seg_selection: the set of segments chosen for analysis
     :param res_selection: the set of resources chosen for analysis
     :param args: HlemArgs object with the configuration to turn a low-level log into a high-level log
+    :param export: bool, if True then the high-level log is exported into the current directory as .xes and .csv file,
+    default is True
     :return:
     """
     args.validate_p()
@@ -112,8 +114,13 @@ def transform_log_to_hl_log(log, act_selection, seg_selection, res_selection, ar
     # first: create event dictionary, event_pairs, trigger and release dicts, components, and link values
     event_dict = preprocess.event_dict(log, res_info)
     steps_list, trigger, release = steps.trigger_release_dicts(log, args.seg_method)
-    all_A, all_R, all_S = component.get_entities(event_dict, steps_list, res_info)
-    component_types_dic = component.comp_type_dict(all_A, all_R, all_S)
+    all_A, all_S, all_R = component.get_entities(event_dict, steps_list, res_info)
+    A_focus, S_focus, R_focus = component.get_entities_for_analysis(event_dict, steps_list, res_info, act_selection,
+                                                                    seg_selection, res_selection)
+    print(len(A_focus), A_focus)
+    print(len(S_focus), S_focus)
+    print(len(R_focus), R_focus)
+    component_types_dic = component.comp_type_dict(A_focus, S_focus, R_focus)
 
     logging.info('Computing windows, partitioning the events into windows.')
     ids_sorted = sorted_ids_by_ts(event_dict)
@@ -121,16 +128,17 @@ def transform_log_to_hl_log(log, act_selection, seg_selection, res_selection, ar
 
     logging.info('Evaluating the chosen high-level features across all time windows.')
     eval_hlf_complete = eval_hlf(event_dict, trigger, window_to_borders, ev_to_window, steps_list, res_info,
-                                 act_selection, seg_selection, res_selection, args.aspects)
+                                 A_focus, S_focus, R_focus, args.aspects)
 
     logging.info('Generating high-level events.')
     id_to_hle_all, window_to_id_to_hle, hla_freq = generate_hle(args.traffic_of_interest, eval_hlf_complete,
-                                                                component_types_dic, args.p, args.aspect_based)
+                                                                args.aspects, component_types_dic, args.p,
+                                                                args.aspect_based)
 
     logging.info('Correlating high-level events into high-level cases.')
     # correlation in hlem using the link values: a value between 0 and 1 for each entity pair
     # note that the link values solely depend on the info in the log, the generated hle are not considered
-    link = entity_pair_link(event_dict, steps, trigger, release, res_info)
+    link = entity_pair_link(event_dict, steps_list, all_A, all_S, all_R, trigger, release, res_info)
     if args.spread_link:
         link = uniform_spread_link(link)
     G = hle_graph_weighted(window_to_id_to_hle, link, args.link_thresh)
@@ -144,6 +152,7 @@ def transform_log_to_hl_log(log, act_selection, seg_selection, res_selection, ar
 
     hl_log_args = HlLogArgs(args.only_entity, args.traffic_of_interest)
     hl_log_xes, hl_log_df = hl_log.generate_hl_xes_and_df(window_to_borders, window_to_id_to_hle, cascade_dict, tz_info,
-                                                          hla_list_filtered, hl_log_args, args.flatten, export)
+                                                          hla_list_filtered, hl_log_args, args.flatten, args.frame,
+                                                          export)
 
     return hl_log_xes, hl_log_df

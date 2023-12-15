@@ -1,10 +1,11 @@
 from dataclasses import dataclass
-
 import pandas as pd
 import os
-from pm4py.objects.conversion.log import converter as log_converter
+import re
 from pm4py.objects.log.exporter.xes import exporter as xes_exporter
+import pm4py
 import frames
+from frames import Frame
 from hle_generation.hle_generation_fw import HLA, TrafficOfInterest, get_high_level_activity
 
 
@@ -19,7 +20,7 @@ class HlLogArgs:
     traffic_of_interest: TrafficOfInterest
 
 
-def create_hle_table(case_column, activity_column, timestamp_column, value_column, component_column):
+def create_hle_table(case_column, activity_column, timestamp_column, value_column, component_column, frame: Frame):
     """
     :param case_column: a list with (high-level) case ids as values
     :param activity_column: a list with (high-level) activity labels as values
@@ -29,7 +30,13 @@ def create_hle_table(case_column, activity_column, timestamp_column, value_colum
     :return: a dataframe containing the input columns
     """
     table = pd.DataFrame(list(zip(case_column, activity_column, timestamp_column, value_column, component_column)),
-                         columns=['case', 'concept:name', 'time:timestamp', 'value', 'entity'])
+                         columns=['case:concept:name', 'concept:name', 'time:timestamp', 'value', 'component'])
+
+    if frame in ['minutes', 'hours', 'days', 'weeks']:
+        #check if some high-level activity refers to delay
+        delay_indices = table[table['concept:name'].str.contains('delay', case=True)].index
+        divider = frames.get_window_size_from_unit(frame)
+        table.loc[delay_indices, 'value'] /= divider
 
     return table
 
@@ -184,7 +191,7 @@ def get_table_data_flat(window_to_border, window_to_id_to_hle, cascade_dict, tz_
 
 
 def create_dataframe(window_to_border, window_to_id_to_hle, cascade_dict, tz_info, hla_filtered, args: HlLogArgs,
-                     flatten):
+                     flatten, frame):
     """
     :param window_to_border: dictionary where each key is a number identifying a window and each
     value=(left_border, right_border) is a tuple containing the borders of the window in seconds
@@ -197,6 +204,7 @@ def create_dataframe(window_to_border, window_to_id_to_hle, cascade_dict, tz_inf
     :param args: parameters only_entity and traffic_of_interest of class HlLogArgs
     :param flatten: if True, hle within the same window of the same cascade get slightly different ts. Otherwise, hle of
     same window of same cascade will have identical ts (= the window's left border)
+    :param frame: can be a number (determining number of windows) or a time unit (minutes, hours, days, or weeks)
     :return: columns containing the high-level case ids, activity labels, timestamps, measured values and components
     """
     if flatten:  # flatten the data, so that hle within the same window of the same cascade get slightly different ts
@@ -213,7 +221,7 @@ def create_dataframe(window_to_border, window_to_id_to_hle, cascade_dict, tz_inf
                                                                                              hla_filtered,
                                                                                              args)
 
-    table = create_hle_table(case_column, act_column, ts_column, val_column, comp_type_column)
+    table = create_hle_table(case_column, act_column, ts_column, val_column, comp_type_column, frame)
 
     return table
 
@@ -223,9 +231,9 @@ def df_to_xes_log(df):
     :param df: dataframe of high-level log
     :return: high-level log in xes format
     """
-    parameters = {log_converter.Variants.TO_EVENT_LOG.value.Parameters.CASE_ID_KEY: 'case'}
-    hl_event_log = log_converter.apply(df, parameters=parameters, variant=log_converter.Variants.TO_EVENT_LOG)
-
+    #parameters = {log_converter.Variants.TO_EVENT_LOG.value.Parameters.CASE_ID_KEY: 'case'}
+    #hl_event_log = log_converter.apply(df, parameters=parameters, variant=log_converter.Variants.TO_EVENT_LOG)
+    hl_event_log = pm4py.convert_to_event_log(df)
     return hl_event_log
 
 
@@ -235,29 +243,27 @@ def export_hl_log(log, path):
     :param path: the path in the dir where the log must be saved
     :return:
     """
-    xes_exporter.apply(log, path)
+    pm4py.write_xes(log, path)
 
 
-def get_max_counter(file_type):
-    """
-    :param file_type: file ending, can be '.csv' or '.xes'
-    :return: the counter of the last file with that ending that was exported in current dir
-    """
-    # Get a list of all files in the current directory
+def get_max_counters():
+    xes_string = '.xes'
+    csv_string = '.csv'
+    hl_string = 'high_level_log'
+
     files = os.listdir()
-
-    # Filter files that match the expected naming pattern
-    matching_files = [file for file in files if file.startswith("high_level_log") and file.endswith(file_type)]
-
-    # Extract the counters from the file names and get the maximum value
-    counters = [int(file.split("_")[2].split(".")[0]) for file in matching_files]
-    max_counter = max(counters, default=0)
-
-    return max_counter
+    count_xes = 0
+    count_csv = 0
+    for filename in files:
+        if hl_string in filename and xes_string in filename:
+            count_xes += 1
+        elif hl_string in filename and csv_string in filename:
+            count_csv += 1
+    return count_xes, count_csv
 
 
 def generate_hl_xes_and_df(window_border_dict, window_to_id_to_hle, cascade_dict, tz_info, hla_filtered,
-                                      args: HlLogArgs, flatten: bool, export: bool):
+                           args: HlLogArgs, flatten: bool, frame, export: bool):
     """
     :param window_border_dict: dictionary where each key is a number identifying a window and each
     value=(left_border, right_border) is a tuple containing the borders of the window in seconds
@@ -270,22 +276,101 @@ def generate_hl_xes_and_df(window_border_dict, window_to_id_to_hle, cascade_dict
     :param args: parameters only_entity and traffic_of_interest of class HlLogArgs
     :param flatten: if True, hle within the same window of the same cascade get slightly different ts. Otherwise, hle of
     same window of same cascade will have identical ts (= the window's left border)
+    :param frame: can be a number (determining number of windows) or a time unit (minutes, hours, days, or weeks)
+    :param export:
     :return: the high-level event log in xes format, the high-level event log as pandas dataframe
     """
-    log_df = create_dataframe(window_border_dict, window_to_id_to_hle, cascade_dict, tz_info, hla_filtered, args, flatten)
+    log_df = create_dataframe(window_border_dict, window_to_id_to_hle, cascade_dict, tz_info, hla_filtered, args,
+                              flatten, frame)
     log_xes = df_to_xes_log(log_df)
-
+    #print("Conversion from df to event log object works!")
     if export:
-        current_dir = os.path.dirname(__file__)
 
-        max_counter_xes = get_max_counter(file_type='.xes')
-        log_name_xes = f"high_level_log_{max_counter_xes}.xes"
+        current_dir = os.getcwd()
+        print("current dir before output:", current_dir)
+
+        output_path = os.path.join(current_dir, "output")
+        os.chdir(output_path)
+        print("current directory should be output:", os.getcwd())
+
+        current_dir = os.getcwd()
+        print("directory where the log will be added:", current_dir)
+
+        xes_counter, csv_counter = get_max_counters()
+
+        if xes_counter == 0:
+            log_name_xes = f"high_level_log.xes"
+        else:
+            log_name_xes = f"high_level_log({xes_counter}).xes"
+
         path_xes = os.path.join(current_dir, log_name_xes)
-        export_hl_log(path_xes, path_xes)
+        export_hl_log(log_xes, path_xes)
 
-        max_counter_csv = get_max_counter(file_type='.csv')
-        log_name_csv = f"high_level_log_{max_counter_csv}.csv"
+        if csv_counter == 0:
+            log_name_csv = f"high_level_log.csv"
+        else:
+            log_name_csv = f"high_level_log({csv_counter}).csv"
         path_csv = os.path.join(current_dir, log_name_csv)
         log_df.to_csv(path_csv, index=False)
 
     return log_xes, log_df
+
+
+def display_cascade_sequences(hl_log_df):
+    unique_cascades = hl_log_df['case:concept:name'].unique()
+    casc_count = hl_log_df['case:concept:name'].value_counts()
+
+    for casc in unique_cascades:
+        no_hle = casc_count[casc]
+        casc_df = hl_log_df['case:concept:name'] == casc
+        casc_ts = hl_log_df[casc_df]['time:timestamp'].tolist()
+        no_ts = len(set(casc_ts))
+        casc_df_sorted = hl_log_df[casc_df].sort_values('time:timestamp')
+        hla_sorted = casc_df_sorted['concept:name'].tolist()
+
+        if no_hle <= no_ts:  # no hle with same ts
+            cascade_sequence = hla_sorted
+        else:
+            ts_sorted = casc_df_sorted['time:timestamp'].tolist()
+            last_ts = ts_sorted[0]
+            cascade_sequence = [{hla_sorted[0]}]
+            hla_sorted = hla_sorted[1:]
+            for i, hla in enumerate(hla_sorted):
+                ts_i = ts_sorted[i + 1]
+                if ts_i == last_ts:
+                    last_hla_set = cascade_sequence[-1]
+                    last_hla_set.add(hla)
+                    cascade_sequence[-1] = last_hla_set
+                else:
+                    cascade_sequence.append({hla})
+                    last_ts = ts_i
+
+        print("Cascade ID: ", casc)
+        print(cascade_sequence)
+
+
+def relevant_hl_log_info(hl_log_df):
+    # print some statistics
+    no_hle = len(hl_log_df['concept:name'])
+    no_unique_hla = len(hl_log_df['concept:name'].unique())
+    print(f'No. high-level events: {no_hle}')
+    print(f'No. unique high-level activities: {no_unique_hla}')
+    no_cascades = len(hl_log_df['case:concept:name'].unique())
+    print(f'No. cascades (high-level cases): {no_cascades}')
+
+    # shows high-level activities and their counts from most to least frequent
+    hla_counts = hl_log_df['concept:name'].value_counts(ascending=False)
+    hla_counts_df = hla_counts.reset_index()
+    hla_counts_df.columns = ['unique high-level activity', 'frequency in hl-log']
+    print(hla_counts_df)
+
+    # shows cascade size (no. events) and their count from largest to smallest
+    cascade_no_events = list(hl_log_df['case:concept:name'].value_counts(ascending=False))
+    casc_size_column = list(set(cascade_no_events))
+    size_count_column = [cascade_no_events.count(casc_size) for casc_size in casc_size_column]
+    casc_size_df = pd.DataFrame({
+        'no. cascades with size': size_count_column,
+        'cascade size': casc_size_column
+    })
+    print(casc_size_df)
+    #display_cascade_sequences(hl_log_df)

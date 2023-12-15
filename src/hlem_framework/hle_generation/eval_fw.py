@@ -95,7 +95,7 @@ def eval_hlf(event_dict, trigger_dict, window_to_borders, ev_to_window, steps_li
     :param A_focus: the set of activities chosen for analysis
     :param S_focus: the set of segments chosen for analysis
     :param R_focus: the set of resources chosen for analysis
-    :param aspects: the set of selected aspects for analysis (e.g., 'enter', 'delay', 'busy', ...)
+    :param aspects: the set of selected aspects for analysis (e.g., 'enter', 'exec', 'busy', ...)
     :return:
     a dict with first level key value pairs: window id, dictionary for that window, and second
     level key value pairs: {(enqueue,a):v1, (enqueue,b):v2,...}, {(enter,(a,b)):w1, (enter,(c,d)):w2,...},
@@ -132,7 +132,7 @@ def eval_hlf(event_dict, trigger_dict, window_to_borders, ev_to_window, steps_li
         w_j = ev_to_window[j]
 
         ai, aj = event_dict[i]['act'], event_dict[j]['act']
-        ts_i, ts_j = event_dict[i]['ts'], event_dict[j]['ts']
+        ts_i, ts_j = event_dict[i]['ts-seconds'], event_dict[j]['ts-seconds']
         s = (ai, aj)
 
         if ai in A_focus:
