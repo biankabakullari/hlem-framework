@@ -1,10 +1,12 @@
 import logging
-import preprocess
+from typing import Literal, Union, List
+
+import steps
 import component
 import frames
 import hle_generation.instance as instance
 import hle_generation.eval as eval
-import hle_generation.hle_generation as hle_gen
+import hle_generation.hle_generation_fw as hle_gen
 import hle_connection.overlap as overlap
 import hle_connection.correlation_by_overlap as corr_overlap
 import hl_paths.case_participation as case_participation

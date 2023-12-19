@@ -6,6 +6,9 @@ def entity_occurrence_counts(event_dict, steps_list, all_A, all_S, all_R, trigge
     """
     :param event_dict: dictionary where keys are numbers identifying events, values are the event attribute-value pairs
     :param steps_list: a list of (i,j) pairs, where i and j event identifiers of event pairs that constitute a step
+    :param all_A: the set of all activities in the data (no filter applied)
+    :param all_S: the set of all segments in the data (no filter applied)
+    :param all_R: the set of all resources in the data (no filter applied)
     :param trigger_dict: a dictionary where each key,value pair i: [j1,...,jn] means that set (i,j1),...,(i,jn) are steps
     :param release_dict: a dictionary where each key,value pair i: [j1,...,jn] means that set (i,j1),...,(i,jn) are steps
     :param res_info: default is False, if True, resource information is collected
@@ -20,6 +23,8 @@ def entity_occurrence_counts(event_dict, steps_list, all_A, all_S, all_R, trigge
     -   rs_counts: a dictionary where rs_counts[(r, s)] for any resource r and segment s is the total number of steps
     traversing s (either entering or exiting s) when r executes an event underlying s
     """
+    # Note how we compute the link values for all pairs of entities, NOT ONLY for the ones whose high-level events we
+    # are interested in. This way, the extremity t
 
     a_counts = dict.fromkeys(all_A, 0)
     s_counts = dict.fromkeys(all_S, 0)
@@ -55,22 +60,24 @@ def entity_occurrence_counts(event_dict, steps_list, all_A, all_S, all_R, trigge
             r_counts[r] += 1
             ar_counts[(a, r)] += 1
 
-    act_pairs = [(event_dict[ei]['act'], event_dict[ej]['act']) for ei, ej in steps_list]
+    all_act_pairs = [(event_dict[ei]['act'], event_dict[ej]['act']) for ei, ej in steps_list]
+    #start_seg_indices = [index for index, (ei, ej) in enumerate(steps_list) if event_dict[ei]['is-start']]
+    #end_seg_indices = [index for index, (ei, ej) in enumerate(steps_list) if event_dict[ej]['is-end']]
 
     if res_info and len(all_R):
         res_pairs = [(event_dict[ei]['res'], event_dict[ej]['res']) for ei, ej in steps_list]
     else:
         res_pairs = []
 
-    for index, act_pair in enumerate(act_pairs):
+    for index, act_pair in enumerate(all_act_pairs):
         aa_counts[act_pair] += 1
         s_counts[act_pair] += 1
         if res_info and len(all_R):
             res_pair = res_pairs[index]
             rr_counts[res_pair] += 1
-            # TODO: need to adjust this for start and end events (should be 1 instead of 1/2)
-            rs_counts[(res_pair[0], act_pair)] += 1 / 2
-            rs_counts[(res_pair[1], act_pair)] += 1 / 2
+
+            rs_counts[(res_pair[0], act_pair)] += 1/2
+            rs_counts[(res_pair[1], act_pair)] += 1/2
 
     return a_counts, r_counts, s_counts, aa_counts, rr_counts, ss_counts, ar_counts, rs_counts
 
@@ -79,6 +86,9 @@ def entity_pair_link(event_dict, steps_list, all_A, all_S, all_R, trigger_dict, 
     """
     :param event_dict: dictionary where keys are numbers identifying events, values are the event attribute-value pairs
     :param steps_list: a list of (i,j) pairs, where i and j event identifiers of event pairs that constitute a step
+    :param all_A: all activities in the data
+    :param all_S: all segments in the data
+    :param all_R: all resources in the data
     :param trigger_dict: a dictionary where each key,value pair i: [j1,...,jn] means that set (i,j1),...,(i,jn) are steps
     :param release_dict: a dictionary where each key,value pair i: [j1,...,jn] means that set (i,j1),...,(i,jn) are steps
     :param res_info: default is False, if True, resource information is collected

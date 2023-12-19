@@ -330,35 +330,79 @@ def generate_hle(traffic_of_interest, eval_complete, aspects, comp_type_dict, p,
     return id_to_hle_all, window_to_id_to_hle, last_freq
 
 
+def get_hla_that_cover_percentage(freq_dict, coverage):
+    """
+    :param freq_dict: A dict where each key is a high-level activity HLA (with aspect, entity and traffic type) and
+    the value is its occurrence count across all windows
+    :param coverage: a number in (0,1) for the high-level event coverage based on high-level activity frequency
+    :return: for coverage e.g., 0.6 it returns the most frequent high-level activities that cover 60% of the high-level
+    events
+    """
+
+    no_hle = sum(freq_dict.values())
+    no_hle_enough = no_hle * coverage
+
+    sorted_hla = sorted(freq_dict, key=freq_dict.get, reverse=True)
+
+    # Select most frequent high-level activities until enough high-level events are included
+    selected_hla = []
+    cumulative_sum = 0
+    for hla in sorted_hla:
+        cumulative_sum += freq_dict[hla]
+        selected_hla.append(hla)
+        if cumulative_sum >= no_hle_enough:
+            break
+
+    return selected_hla
+
+
+def get_top_n_hla_with_ties(freq_dict, n):
+    """
+    :param freq_dict: A dict where each key is a high-level activity HLA (with aspect, entity and traffic type) and
+    the value is its occurrence count across all windows
+    :param n: An integer
+    :return: The n most frequent high-level activities (or more if there are multiple high-level activities as frequent
+    as the n-th most frequent one)
+    """
+    sorted_hla = sorted(freq_dict, key=freq_dict.get, reverse=True)
+
+    # Ensure n does not exceed the number of unique values
+    n = min(n, len(set(freq_dict.values())))
+
+    top_n_hla = sorted_hla[:n]
+
+    # Include additional hla which are equally frequent as the n-th key, if n is within range
+    nth_value = freq_dict[top_n_hla[-1]]
+    for hla in sorted_hla[n:]:
+        if freq_dict[hla] == nth_value:
+            top_n_hla.append(hla)
+        else:
+            break
+
+    return top_n_hla
+
+
 def filter_hla(freq_dict, freq_thresh):
     """
     :param freq_dict: A dict where each key is a high-level activity HLA (with aspect, entity and traffic type) and
     the value is its occurrence count across all windows
-    :param freq_thresh:
-    :return:
+    :param freq_thresh: either 'all', a float in (0,1) or an integer
+    :return: if freq_thresh is 'all', returns all high-level activities, is freq_thresh is a float x, returns the most
+    frequent high-level activities that cover x*100% of high-level events, if freq_thresh is an integer n, returns most
+    n frequent high-level activities
     """
 
-    freq_values = [freq_dict[hla] for hla in freq_dict.keys()]
+    if freq_thresh == 'all':
+        all_hla = freq_dict.keys()
+        return all_hla
 
-    # a freq_thresh=0.8 requests selecting only the 20% most frequent high-level activities
-    if 0 < freq_thresh < 1:
-        percentile = freq_thresh * 100
-        _, high = get_low_and_high_thresholds(freq_values, percentile)
-        hla_filtered = [hla for hla in freq_dict.keys() if freq_dict[hla] >= high]
-        return hla_filtered
+    elif 0 < freq_thresh < 1:
+        hla_percentage = get_hla_that_cover_percentage(freq_dict, freq_thresh)
+        return hla_percentage
 
-    # a freq_thresh=7 requests selecting the high-level activities whose frequency is in the top 7 frequencies
-    elif freq_thresh > 1 and isinstance(freq_thresh, int):
-        freq_values_set = list(set(freq_values))
-        freq_values_high_enough = sorted(freq_values_set, reverse=True)[:freq_thresh]
-        lowest_acceptable = freq_values_high_enough[-1]
-        hla_filtered = [hla for hla in freq_dict.keys() if freq_dict[hla] >= lowest_acceptable]
-        return hla_filtered
-
-    # freq_thresh = 1 means no filtering required
-    elif freq_thresh == 1:
-        hla_unfiltered = freq_dict.keys()
-        return hla_unfiltered
-
+    elif isinstance(freq_thresh, int):
+        hla_top_n = get_top_n_hla_with_ties(freq_dict, freq_thresh)
+        return hla_top_n
     else:
-        raise ValueError('The freq_thresh to filter high-level activities must be a float (0,1) or an integer >=1')
+        raise ValueError('The freq_thresh to filter high-level activities must be either `all`,  a float (0,1) or '
+                         'an integer.')

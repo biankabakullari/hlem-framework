@@ -89,7 +89,7 @@ def hle_graph_weighted(window_to_id_to_hle, link_dict, link_thresh):
                 edge_weights_previous_now = two_windows_edge_weights2(previous_window, this_window, window_to_id_to_hle, link_dict)
                 for u, v in edge_weights_previous_now.keys():
                     uv_weight = edge_weights_previous_now[(u, v)]
-                    if uv_weight >= link_thresh:
+                    if uv_weight > link_thresh:
                         G.add_edge(u, v)
             last_opened = True
 

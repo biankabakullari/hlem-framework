@@ -28,9 +28,10 @@ def get_entities(event_dict, steps_list, res_info):
 
 def get_activities_that_cover(event_dict, coverage):
     """
-    :param event_dict:
-    :param coverage:
-    :return:
+    :param event_dict: dictionary where keys are numbers identifying events, values are the event attribute-value pairs
+    :param coverage: a number in (0,1] for the event coverage based on activity value frequency
+    :return: for coverage e.g., 0.6 it returns the most frequent activities that cover 60% of the events, it DOES NOT
+    project the event data onto those events
     """
     # Calculate the total number of events
     total_events = len(event_dict)
@@ -60,9 +61,10 @@ def get_activities_that_cover(event_dict, coverage):
 
 def get_resources_that_cover(event_dict, coverage):
     """
-    :param event_dict:
-    :param coverage:
-    :return:
+    :param event_dict: dictionary where keys are numbers identifying events, values are the event attribute-value pairs
+    :param coverage: a number in (0,1] for the event coverage based on resource value frequency
+    :return: for coverage e.g., 0.6 it returns the most frequent resources that cover 60% of the events, it DOES NOT
+    project the event data onto those events
     """
     # Calculate the total number of events
     total_events = len(event_dict)
@@ -91,10 +93,12 @@ def get_resources_that_cover(event_dict, coverage):
 
 def get_segments_that_cover(event_dict, steps_list, coverage):
     """
-    :param event_dict:
-    :param steps_list:
-    :param coverage:
-    :return:
+    :param event_dict: dictionary where keys are numbers identifying events, values are the event attribute-value pairs
+    :param steps_list: a list of (i,j) pairs, where i and j event identifiers of event pairs that constitute a step
+    :param coverage: a number in (0,1] for the steps (think of directly-follows events, arcs in the DFG) coverage based
+    on their underlying activity value pair (segment) frequency
+    :return: for coverage e.g., 0.6 it returns the most frequent activity pairs (segments) that cover 60% of the steps,
+    it DOES NOT project the event data onto those steps
     """
     # Create a dictionary to count activity pairs (segments)
     activity_pair_counts = Counter()
@@ -127,7 +131,6 @@ def get_segments_that_cover(event_dict, steps_list, coverage):
     return selected_activity_pairs
 
 
-#TODO: make act_selected, res_selected and seg_selected possible as lists AND numbers
 def get_entities_for_analysis(event_dict, steps_list, res_info, act_selected, seg_selected, res_selected):
     """
     :param event_dict: dictionary where keys are numbers identifying events, values are the event attribute-value pairs
@@ -142,6 +145,7 @@ def get_entities_for_analysis(event_dict, steps_list, res_info, act_selected, se
     -   S: the set of segments that qualify for analysis, determined by act_selected
         (those with both underlying activities are in A)
     """
+
     activity_set, segment_set, resource_set = get_entities(event_dict, steps_list, res_info)
 
     if act_selected == 'all':

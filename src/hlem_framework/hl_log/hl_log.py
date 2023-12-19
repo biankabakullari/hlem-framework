@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 import pandas as pd
 import os
-import re
-from pm4py.objects.log.exporter.xes import exporter as xes_exporter
 import pm4py
 import frames
 from frames import Frame
@@ -27,6 +25,7 @@ def create_hle_table(case_column, activity_column, timestamp_column, value_colum
     :param timestamp_column: a list with timestamps as values
     :param value_column: a list with numbers as values
     :param component_column: a list with components ('activity', 'segment', or 'resource') as values
+    :param frame: a value from ['minutes', 'hours', 'days', 'weeks']
     :return: a dataframe containing the input columns
     """
     table = pd.DataFrame(list(zip(case_column, activity_column, timestamp_column, value_column, component_column)),
@@ -247,6 +246,10 @@ def export_hl_log(log, path):
 
 
 def get_max_counters():
+    """
+    :return: returns the number of files ending in .xes and .csv in the current directory,
+    used to name the new high-level log that will be downloaded
+    """
     xes_string = '.xes'
     csv_string = '.csv'
     hl_string = 'high_level_log'
